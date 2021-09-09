@@ -1,0 +1,38 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/master/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "datasource",
+  "name": "Grafana Dashboard Sync Plugin",
+  "id": "novatec-dashboardsync-datasource",
+  "metrics": true,
+  "backend": true,
+  "executable": "gpx_grafana-dashboard-sync-plugin",
+  "info": {
+    "description": "grafana-dashboard-sync-plugin",
+    "author": {
+      "name": "Novatec Consulting GmbH",
+      "url": "https://www.novatec-gmbh.de/"
+    },
+    "keywords": [],
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [
+      {
+        "name": "Project site",
+        "url": "https://github.com/NovatecConsulting/grafana-dashboard-sync-plugin"
+      },
+      {
+        "name": "Apache License",
+        "url": "https://github.com/NovatecConsulting/grafana-dashboard-sync-plugin/blob/master/LICENSE"
+      }
+    ],
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=7.0.0",
+    "plugins": []
+  }
+}
