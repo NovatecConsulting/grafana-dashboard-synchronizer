@@ -14,84 +14,131 @@ import (
 	"time"
 )
 
-// Workflow to fetch remote branch, add Json Content as File to memory, commit and push to remote repo
-func callGit(gitUrl string, privateKeyFilePath string, fileName string, fileContent string)  {
+// GitApi access to git api
+type GitApi struct {
+	gitUrl string
+	authenticator *ssh.PublicKeys
+	inMemoryStore memory.Storage
+	inMemoryFileSystem billy.Filesystem
+}
+
+// NewGitApi creates a new NewGitApi instance
+func NewGitApi(gitUrl string, privateKeyFilePath string) GitApi {
+	authenticator, _ := createAuthenticator(privateKeyFilePath)
+	inMemoryStore, inMemoryFileSystem := createInMemory()
+	gitApi := GitApi {gitUrl,authenticator, *inMemoryStore, inMemoryFileSystem}
+
+	return gitApi
+}
+
+// helper function to create the git authenticator
+func createAuthenticator(privateKeyFilePath string) (*ssh.PublicKeys, error) {
 	// git authentication with ssh
 	_, err := os.Stat(privateKeyFilePath)
 	if err != nil {
-		log.DefaultLogger.Warn("read file %s failed", privateKeyFilePath, err.Error())
+		log.DefaultLogger.Error("read file %s failed", privateKeyFilePath, err.Error())
+		return nil, err
 	}
 	authenticator, err:= ssh.NewPublicKeysFromFile("git", privateKeyFilePath, "")
 	if err != nil {
-		log.DefaultLogger.Warn("generate public keys failed", "error", err.Error())
+		log.DefaultLogger.Error("generate public keys failed", "error", err.Error())
+		return nil, err
 	}
+
 	// TODO delete and set known hosts?
 	authenticator.HostKeyCallback = ssh2.InsecureIgnoreHostKey()
 
-	// TODO develop small functions:
+	return authenticator, err
+}
+
+// helper function to create the in memory storage and filesystem
+func createInMemory() (*memory.Storage, billy.Filesystem){
 	// prepare in memory
-	var store *memory.Storage
-	store = memory.NewStorage()
+	store := memory.NewStorage()
 	var fs billy.Filesystem
 	fs = memfs.New()
 
+	return store, fs
+}
+
+// CloneRepo clones the gitApi.gitUrls repository
+func (gitApi GitApi) CloneRepo() (*git.Repository, error){
 	// git clone
-	r, err := git.Clone(store, fs, &git.CloneOptions{
-		URL: gitUrl,
-		Auth: authenticator,
+	r, err := git.Clone(&gitApi.inMemoryStore, gitApi.inMemoryFileSystem, &git.CloneOptions{
+		URL: gitApi.gitUrl,
+		Auth: gitApi.authenticator,
 	})
 	if err != nil {
 		log.DefaultLogger.Error("clone error" , "error", err)
+		return nil, err
 	} else {
 		log.DefaultLogger.Info("repo cloned")
 	}
 
+	return r, err
+}
+
+// FetchRepo fetches the given repository
+func (gitApi GitApi) FetchRepo(repository git.Repository) {
 	// fetch repo
 	log.DefaultLogger.Info("fetching repo")
-	err = r.Fetch(&git.FetchOptions{
+	err := repository.Fetch(&git.FetchOptions{
 		RemoteName: "origin",
-		Auth: authenticator,
+		Auth: gitApi.authenticator,
 	})
 	if err != nil {
 		log.DefaultLogger.Error("fetch error", "fetchMessage", err)
+		return
 	}
+}
 
-	// add file with content
-	tempFile, err := fs.Create(fileName)
+// AddFileWithContent add the given filename and content to the in memory filesystem
+func (gitApi GitApi) AddFileWithContent(fileName string, fileContent string) {
+	// add file with content to in memory filesystem
+	tempFile, err := gitApi.inMemoryFileSystem.Create(fileName)
 	if err != nil {
-		log.DefaultLogger.Error("create file error" , "error", err)
+		log.DefaultLogger.Error("create file error", "error", err)
+		return
 	} else {
 		tempFile.Write([]byte(fileContent))
 		tempFile.Close()
 	}
+}
 
+// CommitWorktree commits all changes in the filesystem
+func (gitApi GitApi) CommitWorktree(repository git.Repository) {
 	// get worktree and commit
-	w, err := r.Worktree()
+	w, err := repository.Worktree()
 	if err != nil {
 		log.DefaultLogger.Error("worktree error" , "error", err)
+		return
 	} else {
 		w.Add("./")
 		wStatus, _ := w.Status()
-		log.DefaultLogger.Info("worktree status" , "status", wStatus)
+		log.DefaultLogger.Debug("worktree status" , "status", wStatus)
+
 		// TODO get tag from frontend
 		_, err := w.Commit("Dashboards synced with tag " + "<tag>", &git.CommitOptions{
 			Author: (*object2.Signature)(&object.Signature{
-				Name:  "grafana_backend",
-				Email: "",
+				Name:  "grafana-dashboard-sync-plugin",
 				When:  time.Now(),
 			}),
 		})
 		if err != nil {
 			log.DefaultLogger.Error("worktree commit error" , "error", err.Error())
+			return
 		}
 	}
+}
 
+// PushRepo pushes the given repository
+func (gitApi GitApi) PushRepo(repository git.Repository) {
 	// push repo
-	err = r.Push(&git.PushOptions{
+	err := repository.Push(&git.PushOptions{
 		RemoteName: "origin",
-		Auth: authenticator,
+		Auth: gitApi.authenticator,
 	})
 	if err != nil {
-		log.DefaultLogger.Error("push error" , "error", err.Error())
+		log.DefaultLogger.Error("push error", "error", err.Error())
 	}
 }

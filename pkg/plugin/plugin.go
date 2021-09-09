@@ -68,7 +68,7 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 	privateKeyFilePath := uiSecureProperties["pkkPath"]
 	dashboardTag := uiProperties["dashboardTag"]
 
-	grafanaApi := New(grafanaUrl, token)
+	grafanaApi := NewGrafanaApi(grafanaUrl, token)
 
 	dashboards, err := grafanaApi.SearchDashboardsWithTag(dashboardTag)
 	if err != nil {
@@ -93,7 +93,16 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 			log.DefaultLogger.Error("update dashboard", "error", err.Error())
 		}
 
-		callGit(gitURL, privateKeyFilePath, dashboardObject.Title + ".json", string(dashboardJson))
+		gitApi := NewGitApi(gitURL, privateKeyFilePath)
+		repository, err := gitApi.CloneRepo()
+		if err != nil {
+			return nil, err
+		}
+		gitApi.FetchRepo(*repository)
+		gitApi.AddFileWithContent(dashboardObject.Title + ".json", string(dashboardJson))
+		gitApi.CommitWorktree(*repository)
+		gitApi.PushRepo(*repository)
+
 	}
 
 	return &backend.CheckHealthResult{

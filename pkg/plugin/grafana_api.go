@@ -5,11 +5,13 @@ import (
 	"github.com/grafana-tools/sdk"
 )
 
+// GrafanaApi access to grafana api
 type GrafanaApi struct {
 	grafanaClient *sdk.Client
 }
 
-func New(grafanaURL string, apiToken string) GrafanaApi {
+// NewGrafanaApi creates a new GrafanaApi instance
+func NewGrafanaApi(grafanaURL string, apiToken string) GrafanaApi {
 	client, _ := sdk.NewClient(grafanaURL, apiToken, sdk.DefaultHTTPClient)
     grafanaApi := GrafanaApi {client}
 	return grafanaApi
