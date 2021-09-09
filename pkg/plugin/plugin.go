@@ -68,25 +68,27 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 	privateKeyFilePath := uiSecureProperties["pkkPath"]
 	dashboardTag := uiProperties["dashboardTag"]
 
-	dashboards, err := SearchDashboardsWithTag(grafanaUrl, token, dashboardTag)
+	grafanaApi := New(grafanaUrl, token)
+
+	dashboards, err := grafanaApi.SearchDashboardsWithTag(dashboardTag)
 	if err != nil {
 		log.DefaultLogger.Error("search dashboard", "error", err.Error())
 	}
 	for _, dashboard := range dashboards{
 		// get raw Json
-		dashboardJson, _, err := GetRawDashboardByID(grafanaUrl, token, dashboard.UID)
+		dashboardJson, _, err := grafanaApi.GetRawDashboardByID(dashboard.UID)
 		if err != nil {
 			log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
 		}
 		// get dashboard Object TODO: Verify if raw Json manipulation is faster
-		dashboardObject, _, err := GetDashboardObjectByID(grafanaUrl, token, dashboard.UID)
+		dashboardObject, _, err := grafanaApi.GetDashboardObjectByID(dashboard.UID)
 		if err != nil {
 			log.DefaultLogger.Error("get dashboard", "error", err.Error())
 		}
 		// delete Tag from dashboard
-		dashboardWithDeletedTag := DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
+		dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
 		// update dashboard with deleted Tag
-		_, err = UpdateDashboardObjectByID(grafanaUrl, token, dashboardWithDeletedTag)
+		_, err = grafanaApi.UpdateDashboardObjectByID(dashboardWithDeletedTag)
 		if err != nil {
 			log.DefaultLogger.Error("update dashboard", "error", err.Error())
 		}
