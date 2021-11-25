@@ -110,7 +110,7 @@ func (gitApi GitApi) AddFileWithContent(fileName string, fileContent string) {
 }
 
 // CommitWorktree commits all changes in the filesystem
-func (gitApi GitApi) CommitWorktree(repository git.Repository) {
+func (gitApi GitApi) CommitWorktree(repository git.Repository, tag string) {
 	// get worktree and commit
 	w, err := repository.Worktree()
 	if err != nil {
@@ -121,8 +121,7 @@ func (gitApi GitApi) CommitWorktree(repository git.Repository) {
 		wStatus, _ := w.Status()
 		log.DefaultLogger.Debug("worktree status" , "status", wStatus)
 
-		// TODO get tag from frontend
-		_, err := w.Commit("Dashboards synced with tag " + "<tag>", &git.CommitOptions{
+		_, err := w.Commit("Dashboards synced with tag <" + tag + ">", &git.CommitOptions{
 			Author: (*object2.Signature)(&object.Signature{
 				Name:  "grafana-dashboard-sync-plugin",
 				When:  time.Now(),
@@ -178,7 +177,7 @@ func (gitApi GitApi) GetFileContent() map[string][]byte {
 	fileMap := make(map[string][]byte)
 
 	for _, file := range files {
-		log.DefaultLogger.Info("File name", "name", file.Name())
+		log.DefaultLogger.Debug("File name", "name", file.Name())
 		if file.IsDir() {
 			continue
 		}

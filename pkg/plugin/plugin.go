@@ -94,23 +94,30 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 		}
 		for _, dashboard := range dashboards {
 			// get raw Json
-			dashboardJson, _, err := grafanaApi.GetRawDashboardByID(dashboard.UID)
+			dashboardJson, boardProperties, err := grafanaApi.GetRawDashboardByID(dashboard.UID)
 			if err != nil {
 				log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
 			}
+
+			// get folder name and id, needed for update processes and git folder structure
+			folderName := boardProperties.FolderTitle
+			folderId := boardProperties.FolderID
+
 			// get dashboard Object TODO: Verify if raw Json manipulation is faster
 			dashboardObject, _, err := grafanaApi.GetDashboardObjectByID(dashboard.UID)
 			if err != nil {
 				log.DefaultLogger.Error("get dashboard", "error", err.Error())
 			}
+
 			// delete Tag from dashboard
 			dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
+
 			// update dashboard with deleted Tag
-			_, err = grafanaApi.UpdateDashboardObjectByID(dashboardWithDeletedTag)
+			_, err = grafanaApi.UpdateDashboardObjectByID(dashboardWithDeletedTag, folderId)
 			if err != nil {
 				log.DefaultLogger.Error("update dashboard", "error", err.Error())
 			}
-			log.DefaultLogger.Info("Dashboard preparation successfully ")
+			log.DefaultLogger.Debug("Dashboard preparation successfully ")
 
 			// Todo: If dashboard found, else skip git workflow
 			gitApi := NewGitApi(pushGitURL, privateKeyFilePath)
@@ -119,9 +126,11 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 				return nil, err
 			}
 			gitApi.FetchRepo(*repository)
-			gitApi.AddFileWithContent(dashboardObject.Title+".json", string(dashboardJson))
-			gitApi.CommitWorktree(*repository)
+			gitApi.AddFileWithContent(folderName+"/"+dashboardObject.Title+".json", string(dashboardJson))
+			gitApi.CommitWorktree(*repository, dashboardTag)
 			gitApi.PushRepo(*repository)
+
+			log.DefaultLogger.Info("Dashboard pushed successfully ")
 		}
 	}
 

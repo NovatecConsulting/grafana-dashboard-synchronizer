@@ -39,9 +39,10 @@ func (grafanaApi GrafanaApi) GetDashboardObjectByID(uid string) (sdk.Board, sdk.
 }
 
 // UpdateDashboardObjectByID update the Dashboard with the given dashboard object
-func (grafanaApi GrafanaApi) UpdateDashboardObjectByID(dashboard sdk.Board) (sdk.StatusMessage, error) {
+func (grafanaApi GrafanaApi) UpdateDashboardObjectByID(dashboard sdk.Board, folderId int) (sdk.StatusMessage, error) {
 	statusMessage, err := grafanaApi.grafanaClient.SetDashboard(context.Background() ,dashboard, sdk.SetDashboardParams{
 			Overwrite: false,
+			FolderID: folderId,
 		})
 	return statusMessage, err
 }
