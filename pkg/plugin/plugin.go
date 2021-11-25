@@ -64,45 +64,65 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 
 	token := uiSecureProperties["token"]
 	grafanaUrl := uiProperties["grafanaURL"]
-	gitURL := uiProperties["gitURL"]
-	privateKeyFilePath := uiSecureProperties["pkkPath"]
-	dashboardTag := uiProperties["dashboardTag"]
+	pushGitURL := uiProperties["gitPushURL"]
+	pullGitURL := uiProperties["gitPullURL"]
+	privateKeyFilePath := uiSecureProperties["privateKeyFilePath"]
+	dashboardTag := uiProperties["tag"]
+	push := uiProperties["push"]
+	pull := uiProperties["pull"]
 
 	grafanaApi := NewGrafanaApi(grafanaUrl, token)
 
-	dashboards, err := grafanaApi.SearchDashboardsWithTag(dashboardTag)
-	if err != nil {
-		log.DefaultLogger.Error("search dashboard", "error", err.Error())
-	}
-	for _, dashboard := range dashboards{
-		// get raw Json
-		dashboardJson, _, err := grafanaApi.GetRawDashboardByID(dashboard.UID)
-		if err != nil {
-			log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
-		}
-		// get dashboard Object TODO: Verify if raw Json manipulation is faster
-		dashboardObject, _, err := grafanaApi.GetDashboardObjectByID(dashboard.UID)
-		if err != nil {
-			log.DefaultLogger.Error("get dashboard", "error", err.Error())
-		}
-		// delete Tag from dashboard
-		dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
-		// update dashboard with deleted Tag
-		_, err = grafanaApi.UpdateDashboardObjectByID(dashboardWithDeletedTag)
-		if err != nil {
-			log.DefaultLogger.Error("update dashboard", "error", err.Error())
-		}
+	if pull == "true" {
+		log.DefaultLogger.Info("Pull from git repo", "url", pullGitURL)
 
-		gitApi := NewGitApi(gitURL, privateKeyFilePath)
+		gitApi := NewGitApi(pullGitURL, privateKeyFilePath)
 		repository, err := gitApi.CloneRepo()
 		if err != nil {
 			return nil, err
 		}
 		gitApi.FetchRepo(*repository)
-		gitApi.AddFileWithContent(dashboardObject.Title + ".json", string(dashboardJson))
-		gitApi.CommitWorktree(*repository)
-		gitApi.PushRepo(*repository)
+		fileMap := gitApi.GetFileContent()
+		grafanaApi.CreateDashboardObjects(fileMap)
+		log.DefaultLogger.Info("Dashboards created")
+	}
 
+	if push == "true" {
+		dashboards, err := grafanaApi.SearchDashboardsWithTag(dashboardTag)
+		if err != nil {
+			log.DefaultLogger.Error("search dashboard", "error", err.Error())
+		}
+		for _, dashboard := range dashboards {
+			// get raw Json
+			dashboardJson, _, err := grafanaApi.GetRawDashboardByID(dashboard.UID)
+			if err != nil {
+				log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
+			}
+			// get dashboard Object TODO: Verify if raw Json manipulation is faster
+			dashboardObject, _, err := grafanaApi.GetDashboardObjectByID(dashboard.UID)
+			if err != nil {
+				log.DefaultLogger.Error("get dashboard", "error", err.Error())
+			}
+			// delete Tag from dashboard
+			dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
+			// update dashboard with deleted Tag
+			_, err = grafanaApi.UpdateDashboardObjectByID(dashboardWithDeletedTag)
+			if err != nil {
+				log.DefaultLogger.Error("update dashboard", "error", err.Error())
+			}
+			log.DefaultLogger.Info("Dashboard preparation successfully ")
+
+			// Todo: If dashboard found, else skip git workflow
+			gitApi := NewGitApi(pushGitURL, privateKeyFilePath)
+			repository, err := gitApi.CloneRepo()
+			if err != nil {
+				return nil, err
+			}
+			gitApi.FetchRepo(*repository)
+			gitApi.AddFileWithContent(dashboardObject.Title+".json", string(dashboardJson))
+			gitApi.CommitWorktree(*repository)
+			gitApi.PushRepo(*repository)
+		}
 	}
 
 	return &backend.CheckHealthResult{

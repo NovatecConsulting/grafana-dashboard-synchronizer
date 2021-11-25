@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"github.com/grafana-tools/sdk"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
 // GrafanaApi access to grafana api
@@ -14,6 +15,7 @@ type GrafanaApi struct {
 func NewGrafanaApi(grafanaURL string, apiToken string) GrafanaApi {
 	client, _ := sdk.NewClient(grafanaURL, apiToken, sdk.DefaultHTTPClient)
     grafanaApi := GrafanaApi {client}
+    log.DefaultLogger.Info("Grafana API Client created")
 	return grafanaApi
 }
 
@@ -42,6 +44,17 @@ func (grafanaApi GrafanaApi) UpdateDashboardObjectByID(dashboard sdk.Board) (sdk
 			Overwrite: false,
 		})
 	return statusMessage, err
+}
+
+// CreateDashboardObjects set a Dashboard with the given raw dashboard object
+func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string][]byte) {
+	for dashboardName, rawDashboard := range fileMap {
+		_, err := grafanaApi.grafanaClient.SetRawDashboard(context.Background(), rawDashboard)
+		if err != nil {
+			log.DefaultLogger.Error("set dashboard error", "error", err.Error())
+		}
+		log.DefaultLogger.Info("Dashboard created", "name", dashboardName)
+	}
 }
 
 // DeleteTagFromDashboardObjectByID delete the given tag from the Dashboard object

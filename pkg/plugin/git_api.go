@@ -10,6 +10,7 @@ import (
 	object2 "gopkg.in/src-d/go-git.v4/plumbing/object"
 	"gopkg.in/src-d/go-git.v4/plumbing/transport/ssh"
 	"gopkg.in/src-d/go-git.v4/storage/memory"
+	"io/ioutil"
 	"os"
 	"time"
 )
@@ -24,7 +25,10 @@ type GitApi struct {
 
 // NewGitApi creates a new NewGitApi instance
 func NewGitApi(gitUrl string, privateKeyFilePath string) GitApi {
-	authenticator, _ := createAuthenticator(privateKeyFilePath)
+	authenticator, err := createAuthenticator(privateKeyFilePath)
+	if err != nil {
+		log.DefaultLogger.Error("authentication failed", "error", err.Error())
+	}
 	inMemoryStore, inMemoryFileSystem := createInMemory()
 	gitApi := GitApi {gitUrl,authenticator, *inMemoryStore, inMemoryFileSystem}
 
@@ -141,4 +145,57 @@ func (gitApi GitApi) PushRepo(repository git.Repository) {
 	if err != nil {
 		log.DefaultLogger.Error("push error", "error", err.Error())
 	}
+}
+
+// PullRepo pull the given repository
+func (gitApi GitApi) PullRepo(repository git.Repository) {
+	// pull repo
+	w, err := repository.Worktree()
+	if err != nil {
+		log.DefaultLogger.Error("worktree error" , "error", err)
+		return
+	} else {
+		err := w.Pull(&git.PullOptions{
+			RemoteName: "origin",
+			Auth: gitApi.authenticator,
+		})
+		if err != nil {
+			log.DefaultLogger.Error("pull error", "error", err.Error())
+			return
+		}
+	}
+}
+
+// GetFileContent get the given content of a file from the in memory filesystem
+func (gitApi GitApi) GetFileContent() map[string][]byte {
+	// read current in memory filesystem
+	files, err := gitApi.inMemoryFileSystem.ReadDir("./")
+	if err != nil {
+		log.DefaultLogger.Error("inMemoryFileSystem error" , "error", err)
+		return nil
+	}
+
+	fileMap := make(map[string][]byte)
+
+	for _, file := range files {
+		log.DefaultLogger.Info("File name", "name", file.Name())
+		if file.IsDir() {
+			continue
+		}
+
+		src, err := gitApi.inMemoryFileSystem.Open(file.Name())
+
+		if err != nil {
+			log.DefaultLogger.Error("inMemoryFileSystem error" , "error", err)
+			return nil
+		}
+		byteFile, err := ioutil.ReadAll(src)
+		if err != nil {
+			log.DefaultLogger.Error("read error" , "error", err)
+		} else {
+			fileMap[file.Name()] = byteFile
+			src.Close()
+		}
+	}
+	return fileMap
 }
