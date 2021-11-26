@@ -166,34 +166,53 @@ func (gitApi GitApi) PullRepo(repository git.Repository) {
 }
 
 // GetFileContent get the given content of a file from the in memory filesystem
-func (gitApi GitApi) GetFileContent() map[string][]byte {
-	// read current in memory filesystem
-	files, err := gitApi.inMemoryFileSystem.ReadDir("./")
+func (gitApi GitApi) GetFileContent() map[string]map[string][]byte {
+	// read current in memory filesystem to get dirs
+	filesOrDirs, err := gitApi.inMemoryFileSystem.ReadDir("./")
 	if err != nil {
 		log.DefaultLogger.Error("inMemoryFileSystem error" , "error", err)
 		return nil
 	}
 
-	fileMap := make(map[string][]byte)
+	var dirMap []string
 
-	for _, file := range files {
-		log.DefaultLogger.Debug("File name", "name", file.Name())
-		if file.IsDir() {
-			continue
+	for _, fileOrDir := range filesOrDirs {
+		if fileOrDir.IsDir() {
+			dirName := fileOrDir.Name()
+			dirMap = append(dirMap, dirName)
 		}
+	}
 
-		src, err := gitApi.inMemoryFileSystem.Open(file.Name())
+	fileMap := make(map[string]map[string][]byte)
 
+	for _, dir := range dirMap {
+		// read current in memory filesystem to get files
+		files, err := gitApi.inMemoryFileSystem.ReadDir("./" + dir + "/")
 		if err != nil {
-			log.DefaultLogger.Error("inMemoryFileSystem error" , "error", err)
+			log.DefaultLogger.Error("inMemoryFileSystem error", "error", err)
 			return nil
 		}
-		byteFile, err := ioutil.ReadAll(src)
-		if err != nil {
-			log.DefaultLogger.Error("read error" , "error", err)
-		} else {
-			fileMap[file.Name()] = byteFile
-			src.Close()
+
+		for _, file := range files {
+
+			if file.IsDir() {
+				continue
+			}
+
+			src, err := gitApi.inMemoryFileSystem.Open(file.Name())
+
+			if err != nil {
+				log.DefaultLogger.Error("inMemoryFileSystem error", "error", err)
+				return nil
+			}
+			byteFile, err := ioutil.ReadAll(src)
+			if err != nil {
+				log.DefaultLogger.Error("read error", "error", err)
+			} else {
+				fileMap[dir] = make(map[string][]byte)
+				fileMap[dir][file.Name()] = byteFile
+				src.Close()
+			}
 		}
 	}
 	return fileMap

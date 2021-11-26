@@ -47,14 +47,48 @@ func (grafanaApi GrafanaApi) UpdateDashboardObjectByID(dashboard sdk.Board, fold
 	return statusMessage, err
 }
 
-// CreateDashboardObjects set a Dashboard with the given raw dashboard object
-func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string][]byte) {
-	for dashboardName, rawDashboard := range fileMap {
-		_, err := grafanaApi.grafanaClient.SetRawDashboard(context.Background(), rawDashboard)
-		if err != nil {
-			log.DefaultLogger.Error("set dashboard error", "error", err.Error())
+// CreateFolder create a folder in Grafana
+func (grafanaApi GrafanaApi) CreateFolder(folderName string) int {
+	folder := sdk.Folder{Title: folderName}
+	folder, err := grafanaApi.grafanaClient.CreateFolder(context.Background(), folder)
+	if err != nil {
+		log.DefaultLogger.Error("get folders error", "error", err.Error())
+	}
+	return folder.ID
+}
+
+// GetOrCreateFolderID returns the ID of a given folder or create it
+func (grafanaApi GrafanaApi) GetOrCreateFolderID(folderName string) int {
+	folders, err := grafanaApi.grafanaClient.GetAllFolders(context.Background())
+	if err != nil {
+		log.DefaultLogger.Error("get folders error", "error", err.Error())
+	}
+	for _, folder := range folders {
+		if folder.Title == folderName {
+			return folder.ID
 		}
-		log.DefaultLogger.Info("Dashboard created", "name", dashboardName)
+	}
+	generatedFolderID := grafanaApi.CreateFolder(folderName)
+	return generatedFolderID
+}
+
+// CreateDashboardObjects set a Dashboard with the given raw dashboard object
+func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[string][]byte) {
+	for dashboardDir, dashboardFile := range fileMap {
+		dirID := grafanaApi.GetOrCreateFolderID(dashboardDir)
+		for dashboardName, rawDashboard := range dashboardFile {
+			_, err := grafanaApi.grafanaClient.SetRawDashboardWithParam(context.Background(), sdk.RawBoardRequest{
+				Dashboard: rawDashboard,
+				Parameters: sdk.SetDashboardParams{
+					Overwrite: false,
+					FolderID:  dirID,
+				},
+			})
+			if err != nil {
+				log.DefaultLogger.Error("set dashboard error", "error", err.Error())
+			}
+			log.DefaultLogger.Info("Dashboard created", "name", dashboardName)
+		}
 	}
 }
 
