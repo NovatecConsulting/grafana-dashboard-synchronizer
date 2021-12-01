@@ -51,7 +51,7 @@ func (grafanaApi GrafanaApi) UpdateDashboardObjectByID(dashboard sdk.Board, fold
 func (grafanaApi GrafanaApi) CreateFolder(folderName string) int {
 	folder := sdk.Folder{Title: folderName}
 	folder, err := grafanaApi.grafanaClient.CreateFolder(context.Background(), folder)
-	if err != nil {
+	if err != nil && folderName != "General" {
 		log.DefaultLogger.Error("get folders error", "error", err.Error())
 	}
 	return folder.ID
@@ -61,7 +61,7 @@ func (grafanaApi GrafanaApi) CreateFolder(folderName string) int {
 func (grafanaApi GrafanaApi) GetOrCreateFolderID(folderName string) int {
 	folders, err := grafanaApi.grafanaClient.GetAllFolders(context.Background())
 	if err != nil {
-		log.DefaultLogger.Error("get folders error", "error", err.Error())
+		log.DefaultLogger.Error("get all folders error", "error", err.Error())
 	}
 	for _, folder := range folders {
 		if folder.Title == folderName {
@@ -87,7 +87,7 @@ func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[strin
 			if err != nil {
 				log.DefaultLogger.Error("set dashboard error", "error", err.Error())
 			}
-			log.DefaultLogger.Info("Dashboard created", "name", dashboardName)
+			log.DefaultLogger.Debug("Dashboard created", "name", dashboardName)
 		}
 	}
 }

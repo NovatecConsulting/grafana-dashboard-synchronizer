@@ -154,6 +154,7 @@ func (gitApi GitApi) PullRepo(repository git.Repository) {
 		log.DefaultLogger.Error("worktree error" , "error", err)
 		return
 	} else {
+		log.DefaultLogger.Debug("Pulling from Repo")
 		err := w.Pull(&git.PullOptions{
 			RemoteName: "origin",
 			Auth: gitApi.authenticator,
@@ -186,30 +187,34 @@ func (gitApi GitApi) GetFileContent() map[string]map[string][]byte {
 	fileMap := make(map[string]map[string][]byte)
 
 	for _, dir := range dirMap {
+		// prepare fileMap for dir
+		fileMap[dir] = make(map[string][]byte)
+
 		// read current in memory filesystem to get files
 		files, err := gitApi.inMemoryFileSystem.ReadDir("./" + dir + "/")
 		if err != nil {
-			log.DefaultLogger.Error("inMemoryFileSystem error", "error", err)
+			log.DefaultLogger.Error("inMemoryFileSystem ReadDir error", "error", err)
 			return nil
 		}
 
 		for _, file := range files {
 
+			log.DefaultLogger.Debug("file", "name", file.Name())
+
 			if file.IsDir() {
 				continue
 			}
 
-			src, err := gitApi.inMemoryFileSystem.Open(file.Name())
+			src, err := gitApi.inMemoryFileSystem.Open("./" + dir + "/" + file.Name())
 
 			if err != nil {
-				log.DefaultLogger.Error("inMemoryFileSystem error", "error", err)
+				log.DefaultLogger.Error("inMemoryFileSystem Open error", "error", err)
 				return nil
 			}
 			byteFile, err := ioutil.ReadAll(src)
 			if err != nil {
 				log.DefaultLogger.Error("read error", "error", err)
 			} else {
-				fileMap[dir] = make(map[string][]byte)
 				fileMap[dir][file.Name()] = byteFile
 				src.Close()
 			}
