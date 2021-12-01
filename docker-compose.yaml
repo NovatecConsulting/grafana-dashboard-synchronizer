@@ -1,5 +1,3 @@
-  #  Grafana
-  ## Dashboarding
   grafana:
     image: grafana/grafana:8.1.2
     container_name: grafana-vhv
@@ -11,9 +9,7 @@
       - SSH_KNOWN_HOSTS=github.com
       - GF_ALLOWED_ORIGINS="http://localhost:3000"
     volumes:
-      - /home/atm/Code/vhv:/var/lib/grafana/plugins
-      - /home/atm/.ssh/clumsy:/usr/share/grafana/.ssh
-
-        #      - ./grafana/provisioning/home-dashboard/home.json:/usr/share/grafana/public/dashboards/home.json
+      - ${PLUGIN_REPO}:/var/lib/grafana/plugins
+      - ${GIT_SSH_KEY}:/usr/share/grafana/.GF_PANELS_DISABLE_SANITIZE_HTML
     ports:
       - 3001:3000
