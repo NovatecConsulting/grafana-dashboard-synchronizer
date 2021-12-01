@@ -1,0 +1,15 @@
+  grafana:
+    image: grafana/grafana:8.1.2
+    container_name: grafana-vhv
+    environment:
+      - GF_PANELS_DISABLE_SANITIZE_HTML=TRUE
+      - GF_SECURITY_ADMIN_PASSWORD=demo
+      - GF_PATHS_PROVISIONING=/usr/share/grafana/custom/
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=novatec-dashboardsync-datasource
+      - SSH_KNOWN_HOSTS=github.com
+      - GF_ALLOWED_ORIGINS="http://localhost:3000"
+    volumes:
+      - ${PLUGIN_REPO}:/var/lib/grafana/plugins
+      - ${GIT_SSH_KEY}:/usr/share/grafana/.GF_PANELS_DISABLE_SANITIZE_HTML
+    ports:
+      - 3001:3000
