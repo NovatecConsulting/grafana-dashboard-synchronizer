@@ -58,6 +58,22 @@ A data source backend plugin consists of both frontend and backend components.
    mage -l
    ```
 
+### Local Development
+
+Set environment variables
+```
+PLUGIN_REPO = local path to cloned repo
+GIT_SSH_KEY = path to private git sshkey
+```
+
+Build frontend and backend and start docker-compose
+
+```
+docker-compose up 
+```
+
+Under datasources the Grafana Dashboard Plugin Sync should be available now
+
 ## Learn more
 
 - [Build a data source backend plugin tutorial](https://grafana.com/tutorials/build-a-data-source-backend-plugin)
