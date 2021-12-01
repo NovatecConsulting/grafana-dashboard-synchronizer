@@ -88,50 +88,54 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 	}
 
 	if push == "true" {
+		gitApi := NewGitApi(pushGitURL, privateKeyFilePath)
+		repository, err := gitApi.CloneRepo()
+		if err != nil {
+			return nil, err
+		}
+		gitApi.FetchRepo(*repository)
+
 		dashboards, err := grafanaApi.SearchDashboardsWithTag(dashboardTag)
 		if err != nil {
 			log.DefaultLogger.Error("search dashboard", "error", err.Error())
 		}
 		for _, dashboard := range dashboards {
-			// get raw Json
-			dashboardJson, boardProperties, err := grafanaApi.GetRawDashboardByID(dashboard.UID)
-			if err != nil {
-				log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
-			}
-
-			// get folder name and id, needed for update processes and git folder structure
-			folderName := boardProperties.FolderTitle
-			folderId := boardProperties.FolderID
-
-			// get dashboard Object TODO: Verify if raw Json manipulation is faster
-			dashboardObject, _, err := grafanaApi.GetDashboardObjectByID(dashboard.UID)
+			// get dashboard Object and Properties
+			dashboardObject, boardProperties, err := grafanaApi.GetDashboardObjectByID(dashboard.UID)
 			if err != nil {
 				log.DefaultLogger.Error("get dashboard", "error", err.Error())
 			}
 
-			// delete Tag from dashboard
+			// delete Tag from dashboard Object
 			dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
 
-			// update dashboard with deleted Tag
+			// get folder name and id, required for update processes and git folder structure
+			folderName := boardProperties.FolderTitle
+			folderId := boardProperties.FolderID
+
+			// update dashboard with deleted Tag in Grafana
 			_, err = grafanaApi.UpdateDashboardObjectByID(dashboardWithDeletedTag, folderId)
 			if err != nil {
 				log.DefaultLogger.Error("update dashboard", "error", err.Error())
 			}
-			log.DefaultLogger.Debug("Dashboard preparation successfully ")
 
-			// Todo: If dashboard found, else skip git workflow
-			gitApi := NewGitApi(pushGitURL, privateKeyFilePath)
-			repository, err := gitApi.CloneRepo()
+			// get raw Json Dashboard, required for import and export
+			dashboardJson, _, err := grafanaApi.GetRawDashboardByID(dashboard.UID)
 			if err != nil {
-				return nil, err
+				log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
 			}
-			gitApi.FetchRepo(*repository)
+
+			log.DefaultLogger.Debug("Dashboard preparation successfully ")
 			gitApi.AddFileWithContent(folderName+"/"+dashboardObject.Title+".json", string(dashboardJson))
+			log.DefaultLogger.Debug("Dashboard added to in memory file system")
+		}
+
+		if len(dashboards) > 0 {
 			gitApi.CommitWorktree(*repository, dashboardTag)
 			gitApi.PushRepo(*repository)
-
-			log.DefaultLogger.Info("Dashboard pushed successfully ")
 		}
+
+		log.DefaultLogger.Info("Dashboard pushed successfully")
 	}
 
 	return &backend.CheckHealthResult{
