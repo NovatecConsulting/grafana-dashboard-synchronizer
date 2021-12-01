@@ -44,7 +44,7 @@ func (d *SampleDatasource) Dispose() {
 // datasource configuration page which allows users to verify that
 // a datasource is working as expected.
 func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
-	log.DefaultLogger.Info("CheckHealth called", "request", req)
+	log.DefaultLogger.Debug("Backend called with following request", "request", req)
 
 	uiProperties := make(map[string]string)
 	_ = json.Unmarshal(req.PluginContext.DataSourceInstanceSettings.JSONData, &uiProperties)
@@ -82,12 +82,15 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 			return nil, err
 		}
 		gitApi.FetchRepo(*repository)
+		gitApi.PullRepo(*repository)
 		fileMap := gitApi.GetFileContent()
 		grafanaApi.CreateDashboardObjects(fileMap)
 		log.DefaultLogger.Info("Dashboards created")
 	}
 
 	if push == "true" {
+		log.DefaultLogger.Info("Push to git repo", "url", pushGitURL)
+
 		gitApi := NewGitApi(pushGitURL, privateKeyFilePath)
 		repository, err := gitApi.CloneRepo()
 		if err != nil {
