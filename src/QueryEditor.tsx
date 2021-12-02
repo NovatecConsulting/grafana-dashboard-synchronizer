@@ -9,9 +9,9 @@ type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>;
 export class QueryEditor extends PureComponent<Props> {
   render() {
     return (
-      <div className="gf-form">
-        <Label description="Only for Backend">Grafana Git Workflow</Label>
-      </div>
+      <Label description="This data source is not intended to provide data or for use in dashboard panels.">
+        Do not use this data source!
+      </Label>
     );
   }
 }
