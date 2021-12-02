@@ -80,7 +80,7 @@ func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[strin
 			_, err := grafanaApi.grafanaClient.SetRawDashboardWithParam(context.Background(), sdk.RawBoardRequest{
 				Dashboard: rawDashboard,
 				Parameters: sdk.SetDashboardParams{
-					Overwrite: false,
+					Overwrite: true,
 					FolderID:  dirID,
 				},
 			})
