@@ -2,8 +2,10 @@ package plugin
 
 import (
 	"context"
-	"github.com/grafana-tools/sdk"
+	"encoding/json"
+	"github.com/NovatecConsulting/grafana-api-go-sdk"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"strconv"
 )
 
 // GrafanaApi access to grafana api
@@ -72,22 +74,44 @@ func (grafanaApi GrafanaApi) GetOrCreateFolderID(folderName string) int {
 	return generatedFolderID
 }
 
+// getDashboardObjectFromRawDashboard get the dashboard object from a raw dashboard json
+func getDashboardObjectFromRawDashboard(rawDashboard []byte) sdk.Board {
+	var dashboard sdk.Board
+	err := json.Unmarshal(rawDashboard, &dashboard)
+	if err != nil {
+		log.DefaultLogger.Error("unmarshal raw dashboard error", "error", err.Error())
+	}
+	return dashboard
+}
+
 // CreateDashboardObjects set a Dashboard with the given raw dashboard object
 func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[string][]byte) {
 	for dashboardDir, dashboardFile := range fileMap {
 		dirID := grafanaApi.GetOrCreateFolderID(dashboardDir)
 		for dashboardName, rawDashboard := range dashboardFile {
+			gitDashboardObject := getDashboardObjectFromRawDashboard(rawDashboard)
+			//// get grafana dashboard to compare version with git dashboard
+			//grafanaDashboardObject, grafanaDashboardProperties, err := grafanaApi.GetDashboardObjectByID(gitDashboardObject.UID)
+			//if err != nil {
+			//	log.DefaultLogger.Error("get dashboard object error", "error", err.Error())
+			//}
+			// Todo: Extend Grafana tools fork to get version note
+			//if grafanaDashboardObject.Version != gitDashboardObject.Version {
 			_, err := grafanaApi.grafanaClient.SetRawDashboardWithParam(context.Background(), sdk.RawBoardRequest{
 				Dashboard: rawDashboard,
 				Parameters: sdk.SetDashboardParams{
 					Overwrite: true,
 					FolderID:  dirID,
+					Message:   "Synchronized from Version " + strconv.Itoa(int(gitDashboardObject.Version)),
 				},
 			})
 			if err != nil {
 				log.DefaultLogger.Error("set dashboard error", "error", err.Error())
 			}
 			log.DefaultLogger.Debug("Dashboard created", "name", dashboardName)
+			//} else {
+			//	log.DefaultLogger.Info("Dashboard already up-to-date", "name", dashboardName)
+			//}
 		}
 	}
 }
