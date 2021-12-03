@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"github.com/NovatecConsulting/grafana-api-go-sdk"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"regexp"
 	"strconv"
+	"strings"
 )
 
 // GrafanaApi access to grafana api
@@ -84,34 +86,72 @@ func getDashboardObjectFromRawDashboard(rawDashboard []byte) sdk.Board {
 	return dashboard
 }
 
+// getLatestVersionsFromDashboardById get the latest version information of a dashboard by id
+func (grafanaApi GrafanaApi) getLatestVersionsFromDashboardById(dashboardId int) int {
+	dashboardVersions, err := grafanaApi.grafanaClient.GetAllDashboardVersions(context.Background(), dashboardId, 1)
+	if err != nil {
+		log.DefaultLogger.Error("get dashboard versions error", "error", err.Error())
+	}
+
+	// get version message
+	latestVersion := dashboardVersions[0]
+	re := regexp.MustCompile(`[-]?\d[\d,]*[\.]?[\d]*`)
+	idFromVersionMessage := re.FindString(latestVersion.Message)
+	log.DefaultLogger.Debug("latest ID in version message", "version", idFromVersionMessage)
+
+	id, err := strconv.ParseUint(idFromVersionMessage, 10, 32)
+	if err != nil {
+		log.DefaultLogger.Error("parsing integer error", "error", err.Error())
+	}
+	return int(id)
+}
+
+// parseGetDashboardError
+func (grafanaApi GrafanaApi) parseGetDashboardError(error error, gitBoardID int, grafanaBoardID int) int {
+	var grafanaDashboardVersionMessageId int
+
+	if error == nil {
+		// get version message ID
+		grafanaDashboardVersionMessageId = grafanaApi.getLatestVersionsFromDashboardById(grafanaBoardID)
+	} else {
+		containsNoDashboard := strings.Contains(error.Error(), "Dashboard not found")
+		if containsNoDashboard {
+			// set message ID from GitHub Board
+			grafanaDashboardVersionMessageId = gitBoardID
+		} else {
+			log.DefaultLogger.Error("get dashboard object error", "error", error.Error())
+		}
+	}
+
+	return grafanaDashboardVersionMessageId
+}
+
 // CreateDashboardObjects set a Dashboard with the given raw dashboard object
 func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[string][]byte) {
 	for dashboardDir, dashboardFile := range fileMap {
 		dirID := grafanaApi.GetOrCreateFolderID(dashboardDir)
 		for dashboardName, rawDashboard := range dashboardFile {
 			gitDashboardObject := getDashboardObjectFromRawDashboard(rawDashboard)
-			//// get grafana dashboard to compare version with git dashboard
-			//grafanaDashboardObject, grafanaDashboardProperties, err := grafanaApi.GetDashboardObjectByID(gitDashboardObject.UID)
-			//if err != nil {
-			//	log.DefaultLogger.Error("get dashboard object error", "error", err.Error())
-			//}
-			// Todo: Extend Grafana tools fork to get version note
-			//if grafanaDashboardObject.Version != gitDashboardObject.Version {
-			_, err := grafanaApi.grafanaClient.SetRawDashboardWithParam(context.Background(), sdk.RawBoardRequest{
-				Dashboard: rawDashboard,
-				Parameters: sdk.SetDashboardParams{
-					Overwrite: true,
-					FolderID:  dirID,
-					Message:   "Synchronized from Version " + strconv.Itoa(int(gitDashboardObject.Version)),
-				},
-			})
-			if err != nil {
-				log.DefaultLogger.Error("set dashboard error", "error", err.Error())
-			}
+			// get grafana dashboard to compare version with git dashboard
+			grafanaDashboardObject, _, err := grafanaApi.GetDashboardObjectByID(gitDashboardObject.UID)
+			grafanaDashboardVersionMessageId := grafanaApi.parseGetDashboardError(err, int(gitDashboardObject.ID), int(grafanaDashboardObject.ID))
+
+			if grafanaDashboardVersionMessageId != int(gitDashboardObject.Version) {
+				_, err := grafanaApi.grafanaClient.SetRawDashboardWithParam(context.Background(), sdk.RawBoardRequest{
+					Dashboard: rawDashboard,
+					Parameters: sdk.SetDashboardParams{
+						Overwrite: true,
+						FolderID:  dirID,
+						Message:   "Synchronized from Version " + strconv.Itoa(int(gitDashboardObject.Version)),
+					},
+				})
+				if err != nil {
+					log.DefaultLogger.Error("set dashboard error", "error", err.Error())
+				}
 			log.DefaultLogger.Debug("Dashboard created", "name", dashboardName)
-			//} else {
-			//	log.DefaultLogger.Info("Dashboard already up-to-date", "name", dashboardName)
-			//}
+			} else {
+				log.DefaultLogger.Info("Dashboard already up-to-date", "name", dashboardName)
+			}
 		}
 	}
 }

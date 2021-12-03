@@ -123,7 +123,7 @@ func (gitApi GitApi) CommitWorktree(repository git.Repository, tag string) {
 		wStatus, _ := w.Status()
 		log.DefaultLogger.Debug("worktree status" , "status", wStatus)
 
-		_, err := w.Commit("Dashboards synced with tag <" + tag + ">", &git.CommitOptions{
+		_, err := w.Commit("Synchronized Dashboards with tag <" + tag + ">", &git.CommitOptions{
 			Author: (*object2.Signature)(&object.Signature{
 				Name:  "grafana-dashboard-sync-plugin",
 				When:  time.Now(),
