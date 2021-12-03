@@ -1,7 +1,7 @@
 {
-  "name": "grafana-stage-app",
-  "version": "1.0.0",
-  "description": "Grafana Stage App",
+  "name": "novatec-dashboardsync-datasource",
+  "version": "0.1.0",
+  "description": "Dashboard Git Synchronization",
   "scripts": {
     "build": "grafana-toolkit plugin:build",
     "test": "grafana-toolkit plugin:test",
@@ -10,7 +10,7 @@
     "sign": "grafana-toolkit plugin:sign",
     "start": "yarn watch"
   },
-  "author": "Novatec",
+  "author": "Novatec Consulting GmbH",
   "license": "Apache-2.0",
   "devDependencies": {
     "@grafana/data": "latest",
