@@ -1,21 +1,26 @@
 {
   "$schema": "https://raw.githubusercontent.com/grafana/grafana/master/docs/sources/developers/plugins/plugin.schema.json",
   "type": "datasource",
-  "name": "Grafana Dashboard Sync Plugin",
+  "name": "Dashboard Git Synchronization",
   "id": "novatec-dashboardsync-datasource",
-  "metrics": true,
+  "category": "other",
+  "metrics": false,
+  "alerting": false,
+  "annotations": false,
+  "logs": false,
+  "tracing": false,
   "backend": true,
   "executable": "gpx_grafana-dashboard-sync-plugin",
   "info": {
-    "description": "grafana-dashboard-sync-plugin",
+    "description": "Synchronize dashboards using a Git repository.",
     "author": {
       "name": "Novatec Consulting GmbH",
       "url": "https://www.novatec-gmbh.de/"
     },
     "keywords": [],
     "logos": {
-      "small": "img/logo.svg",
-      "large": "img/logo.svg"
+      "small": "img/logo.png",
+      "large": "img/logo.png"
     },
     "links": [
       {
@@ -23,7 +28,7 @@
         "url": "https://github.com/NovatecConsulting/grafana-dashboard-sync-plugin"
       },
       {
-        "name": "Apache License",
+        "name": "Apache-2.0",
         "url": "https://github.com/NovatecConsulting/grafana-dashboard-sync-plugin/blob/master/LICENSE"
       }
     ],
