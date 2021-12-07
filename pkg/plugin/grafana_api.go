@@ -2,7 +2,12 @@ package plugin
 
 import (
 	"context"
-	"github.com/grafana-tools/sdk"
+	"encoding/json"
+	"regexp"
+	"strconv"
+	"strings"
+
+	sdk "github.com/NovatecConsulting/grafana-api-go-sdk"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
@@ -14,8 +19,8 @@ type GrafanaApi struct {
 // NewGrafanaApi creates a new GrafanaApi instance
 func NewGrafanaApi(grafanaURL string, apiToken string) GrafanaApi {
 	client, _ := sdk.NewClient(grafanaURL, apiToken, sdk.DefaultHTTPClient)
-    grafanaApi := GrafanaApi {client}
-    log.DefaultLogger.Info("Grafana API Client created")
+	grafanaApi := GrafanaApi{client}
+	log.DefaultLogger.Info("Grafana API Client created")
 	return grafanaApi
 }
 
@@ -27,23 +32,23 @@ func (grafanaApi GrafanaApi) SearchDashboardsWithTag(tag string) ([]sdk.FoundBoa
 }
 
 // GetRawDashboardByID return Dashboard by the given UID as raw byte object
-func (grafanaApi GrafanaApi) GetRawDashboardByID(uid string) ([]byte, sdk.BoardProperties,  error) {
+func (grafanaApi GrafanaApi) GetRawDashboardByID(uid string) ([]byte, sdk.BoardProperties, error) {
 	rawDashboard, props, err := grafanaApi.grafanaClient.GetRawDashboardByUID(context.Background(), uid)
 	return rawDashboard, props, err
 }
 
 // GetDashboardObjectByID return Dashboard by the given UID as object
-func (grafanaApi GrafanaApi) GetDashboardObjectByID(uid string) (sdk.Board, sdk.BoardProperties,  error) {
+func (grafanaApi GrafanaApi) GetDashboardObjectByID(uid string) (sdk.Board, sdk.BoardProperties, error) {
 	dashboardObject, props, err := grafanaApi.grafanaClient.GetDashboardByUID(context.Background(), uid)
 	return dashboardObject, props, err
 }
 
 // UpdateDashboardObjectByID update the Dashboard with the given dashboard object
 func (grafanaApi GrafanaApi) UpdateDashboardObjectByID(dashboard sdk.Board, folderId int) (sdk.StatusMessage, error) {
-	statusMessage, err := grafanaApi.grafanaClient.SetDashboard(context.Background() ,dashboard, sdk.SetDashboardParams{
-			Overwrite: false,
-			FolderID: folderId,
-		})
+	statusMessage, err := grafanaApi.grafanaClient.SetDashboard(context.Background(), dashboard, sdk.SetDashboardParams{
+		Overwrite: false,
+		FolderID:  folderId,
+	})
 	return statusMessage, err
 }
 
@@ -72,22 +77,82 @@ func (grafanaApi GrafanaApi) GetOrCreateFolderID(folderName string) int {
 	return generatedFolderID
 }
 
+// getDashboardObjectFromRawDashboard get the dashboard object from a raw dashboard json
+func getDashboardObjectFromRawDashboard(rawDashboard []byte) sdk.Board {
+	var dashboard sdk.Board
+	err := json.Unmarshal(rawDashboard, &dashboard)
+	if err != nil {
+		log.DefaultLogger.Error("unmarshal raw dashboard error", "error", err.Error())
+	}
+	return dashboard
+}
+
+// getLatestVersionsFromDashboardById get the latest version information of a dashboard by id
+func (grafanaApi GrafanaApi) getLatestVersionsFromDashboardById(dashboardId int) int {
+	versionResponse, err := grafanaApi.grafanaClient.GetAllDashboardVersions(context.Background(), dashboardId, 1)
+	if err != nil {
+		log.DefaultLogger.Error("get dashboard versions error", "error", err.Error())
+	}
+
+	// get version message
+	latestVersion := versionResponse.Versions[0]
+	re := regexp.MustCompile(`[-]?\d[\d,]*[\.]?[\d]*`)
+	idFromVersionMessage := re.FindString(latestVersion.Message)
+	log.DefaultLogger.Debug("latest ID in version message", "version", idFromVersionMessage)
+
+	id, err := strconv.ParseUint(idFromVersionMessage, 10, 32)
+	if err != nil {
+		log.DefaultLogger.Error("parsing integer error", "error", err.Error())
+	}
+	return int(id)
+}
+
+// parseGetDashboardError
+func (grafanaApi GrafanaApi) parseGetDashboardError(error error, gitBoardID int, grafanaBoardID int) int {
+	var grafanaDashboardVersionMessageId int
+
+	if error == nil {
+		// get version message ID
+		grafanaDashboardVersionMessageId = grafanaApi.getLatestVersionsFromDashboardById(grafanaBoardID)
+	} else {
+		containsNoDashboard := strings.Contains(error.Error(), "Dashboard not found")
+		if containsNoDashboard {
+			// set message ID from GitHub Board
+			grafanaDashboardVersionMessageId = gitBoardID
+		} else {
+			log.DefaultLogger.Error("get dashboard object error", "error", error.Error())
+		}
+	}
+
+	return grafanaDashboardVersionMessageId
+}
+
 // CreateDashboardObjects set a Dashboard with the given raw dashboard object
 func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[string][]byte) {
 	for dashboardDir, dashboardFile := range fileMap {
 		dirID := grafanaApi.GetOrCreateFolderID(dashboardDir)
 		for dashboardName, rawDashboard := range dashboardFile {
-			_, err := grafanaApi.grafanaClient.SetRawDashboardWithParam(context.Background(), sdk.RawBoardRequest{
-				Dashboard: rawDashboard,
-				Parameters: sdk.SetDashboardParams{
-					Overwrite: false,
-					FolderID:  dirID,
-				},
-			})
-			if err != nil {
-				log.DefaultLogger.Error("set dashboard error", "error", err.Error())
+			gitDashboardObject := getDashboardObjectFromRawDashboard(rawDashboard)
+			// get grafana dashboard to compare version with git dashboard
+			grafanaDashboardObject, _, err := grafanaApi.GetDashboardObjectByID(gitDashboardObject.UID)
+			grafanaDashboardVersionMessageId := grafanaApi.parseGetDashboardError(err, int(gitDashboardObject.ID), int(grafanaDashboardObject.ID))
+
+			if grafanaDashboardVersionMessageId != int(gitDashboardObject.Version) {
+				_, err := grafanaApi.grafanaClient.SetRawDashboardWithParam(context.Background(), sdk.RawBoardRequest{
+					Dashboard: rawDashboard,
+					Parameters: sdk.SetDashboardParams{
+						Overwrite: true,
+						FolderID:  dirID,
+						Message:   "Synchronized from Version " + strconv.Itoa(int(gitDashboardObject.Version)),
+					},
+				})
+				if err != nil {
+					log.DefaultLogger.Error("set dashboard error", "error", err.Error())
+				}
+				log.DefaultLogger.Debug("Dashboard created", "name", dashboardName)
+			} else {
+				log.DefaultLogger.Info("Dashboard already up-to-date", "name", dashboardName)
 			}
-			log.DefaultLogger.Debug("Dashboard created", "name", dashboardName)
 		}
 	}
 }
@@ -102,4 +167,3 @@ func (grafanaApi GrafanaApi) DeleteTagFromDashboardObjectByID(dashboard sdk.Boar
 	}
 	return dashboard
 }
-
