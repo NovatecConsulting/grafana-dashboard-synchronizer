@@ -1,32 +1,44 @@
-import { DataQuery, DataSourceJsonData } from '@grafana/data';
-
-export interface MyQuery extends DataQuery {
-  queryText?: string;
-  constant: number;
-  withStreaming: boolean;
-}
-
-export const defaultQuery: Partial<MyQuery> = {
-  constant: 6.5,
-  withStreaming: false,
-};
+import { DataSourceJsonData, DataSourceSettings } from '@grafana/data';
 
 /**
  * These are options configured for each DataSource instance.
  */
-export interface MyDataSourceOptions extends DataSourceJsonData {
-  gitPushURL?: string;
-  gitPullURL?: string;
-  tag?: string;
-  grafanaURL?: string;
-  pull?: string;
-  push?: string;
+export interface SynchronizeOptions extends DataSourceJsonData {
+  grafanaUrl?: string;
+  gitUrl?: string;
+
+  pushConfiguration?: PushOptions;
+  pullConfiguration?: PullOptions;
 }
+
+export interface PushPullOptions {
+  enable?: boolean;
+  gitBranch?: string;
+  syncInterval?: number;
+  filter?: string;
+}
+
+export interface PushOptions extends PushPullOptions {
+  tagPattern?: string;
+  pushTags?: boolean;
+}
+
+export interface PullOptions extends PushPullOptions {}
 
 /**
  * Value that is used in the backend, but never sent over HTTP to the frontend
  */
-export interface MySecureJsonData {
-  token?: string;
-  privateKeyFilePath?: string;
+export interface SecureSynchronizeOptions {
+  grafanaApiToken?: string;
+  privateSshKey?: string;
+}
+
+export interface OptionsChange {
+  options: DataSourceSettings<SynchronizeOptions, SecureSynchronizeOptions>;
+  onChange: (newOptions: DataSourceSettings<SynchronizeOptions, SecureSynchronizeOptions>) => void;
+}
+
+export interface PushPullOptionsChange {
+  ppOptions: PushPullOptions;
+  onChange: (newOptions: PushPullOptions) => void;
 }
