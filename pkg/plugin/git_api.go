@@ -1,6 +1,10 @@
 package plugin
 
 import (
+	"io/ioutil"
+	"strings"
+	"time"
+
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	ssh2 "golang.org/x/crypto/ssh"
@@ -10,41 +14,37 @@ import (
 	object2 "gopkg.in/src-d/go-git.v4/plumbing/object"
 	"gopkg.in/src-d/go-git.v4/plumbing/transport/ssh"
 	"gopkg.in/src-d/go-git.v4/storage/memory"
-	"io/ioutil"
-	"os"
-	"strings"
-	"time"
 )
 
 // GitApi access to git api
 type GitApi struct {
-	gitUrl string
-	authenticator *ssh.PublicKeys
-	inMemoryStore memory.Storage
+	gitUrl             string
+	authenticator      *ssh.PublicKeys
+	inMemoryStore      memory.Storage
 	inMemoryFileSystem billy.Filesystem
 }
 
 // NewGitApi creates a new NewGitApi instance
-func NewGitApi(gitUrl string, privateKeyFilePath string) GitApi {
-	authenticator, err := createAuthenticator(privateKeyFilePath)
+func NewGitApi(gitUrl string, privateKey []byte) GitApi {
+	authenticator, err := createAuthenticator(privateKey)
 	if err != nil {
 		log.DefaultLogger.Error("authentication failed", "error", err.Error())
 	}
 	inMemoryStore, inMemoryFileSystem := createInMemory()
-	gitApi := GitApi {gitUrl,authenticator, *inMemoryStore, inMemoryFileSystem}
+	gitApi := GitApi{gitUrl, authenticator, *inMemoryStore, inMemoryFileSystem}
 
 	return gitApi
 }
 
 // helper function to create the git authenticator
-func createAuthenticator(privateKeyFilePath string) (*ssh.PublicKeys, error) {
+func createAuthenticator(privateKey []byte) (*ssh.PublicKeys, error) {
 	// git authentication with ssh
-	_, err := os.Stat(privateKeyFilePath)
-	if err != nil {
-		log.DefaultLogger.Error("read file %s failed", privateKeyFilePath, err.Error())
-		return nil, err
-	}
-	authenticator, err:= ssh.NewPublicKeysFromFile("git", privateKeyFilePath, "")
+	// _, err := os.Stat(privateKeyFilePath)
+	// if err != nil {
+	// 	log.DefaultLogger.Error("read file failed", privateKeyFilePath, err.Error())
+	// 	return nil, err
+	// }
+	authenticator, err := ssh.NewPublicKeys("git", privateKey, "")
 	if err != nil {
 		log.DefaultLogger.Error("generate public keys failed", "error", err.Error())
 		return nil, err
@@ -57,7 +57,7 @@ func createAuthenticator(privateKeyFilePath string) (*ssh.PublicKeys, error) {
 }
 
 // helper function to create the in memory storage and filesystem
-func createInMemory() (*memory.Storage, billy.Filesystem){
+func createInMemory() (*memory.Storage, billy.Filesystem) {
 	// prepare in memory
 	store := memory.NewStorage()
 	var fs billy.Filesystem
@@ -67,14 +67,14 @@ func createInMemory() (*memory.Storage, billy.Filesystem){
 }
 
 // CloneRepo clones the gitApi.gitUrls repository
-func (gitApi GitApi) CloneRepo() (*git.Repository, error){
+func (gitApi GitApi) CloneRepo() (*git.Repository, error) {
 	// git clone
 	r, err := git.Clone(&gitApi.inMemoryStore, gitApi.inMemoryFileSystem, &git.CloneOptions{
-		URL: gitApi.gitUrl,
+		URL:  gitApi.gitUrl,
 		Auth: gitApi.authenticator,
 	})
 	if err != nil {
-		log.DefaultLogger.Error("clone error" , "error", err)
+		log.DefaultLogger.Error("clone error", "error", err)
 		return nil, err
 	} else {
 		log.DefaultLogger.Info("repo cloned")
@@ -89,7 +89,7 @@ func (gitApi GitApi) FetchRepo(repository git.Repository) {
 	log.DefaultLogger.Info("fetching repo")
 	err := repository.Fetch(&git.FetchOptions{
 		RemoteName: "origin",
-		Auth: gitApi.authenticator,
+		Auth:       gitApi.authenticator,
 	})
 	if strings.Contains(err.Error(), "already up-to-date") {
 		log.DefaultLogger.Info("fetching completed", "message", err.Error())
@@ -116,21 +116,21 @@ func (gitApi GitApi) CommitWorktree(repository git.Repository, tag string) {
 	// get worktree and commit
 	w, err := repository.Worktree()
 	if err != nil {
-		log.DefaultLogger.Error("worktree error" , "error", err)
+		log.DefaultLogger.Error("worktree error", "error", err)
 		return
 	} else {
 		w.Add("./")
 		wStatus, _ := w.Status()
-		log.DefaultLogger.Debug("worktree status" , "status", wStatus)
+		log.DefaultLogger.Debug("worktree status", "status", wStatus)
 
-		_, err := w.Commit("Synchronized Dashboards with tag <" + tag + ">", &git.CommitOptions{
+		_, err := w.Commit("Synchronized Dashboards with tag <"+tag+">", &git.CommitOptions{
 			Author: (*object2.Signature)(&object.Signature{
-				Name:  "grafana-dashboard-sync-plugin",
-				When:  time.Now(),
+				Name: "grafana-dashboard-sync-plugin",
+				When: time.Now(),
 			}),
 		})
 		if err != nil {
-			log.DefaultLogger.Error("worktree commit error" , "error", err.Error())
+			log.DefaultLogger.Error("worktree commit error", "error", err.Error())
 			return
 		}
 	}
@@ -141,7 +141,7 @@ func (gitApi GitApi) PushRepo(repository git.Repository) {
 	// push repo
 	err := repository.Push(&git.PushOptions{
 		RemoteName: "origin",
-		Auth: gitApi.authenticator,
+		Auth:       gitApi.authenticator,
 	})
 	if err != nil {
 		log.DefaultLogger.Error("push error", "error", err.Error())
@@ -153,12 +153,12 @@ func (gitApi GitApi) PullRepo(repository git.Repository) {
 	// pull repo
 	w, err := repository.Worktree()
 	if err != nil {
-		log.DefaultLogger.Error("worktree error" , "error", err)
+		log.DefaultLogger.Error("worktree error", "error", err)
 	} else {
 		log.DefaultLogger.Debug("Pulling from Repo")
 		err := w.Pull(&git.PullOptions{
 			RemoteName: "origin",
-			Auth: gitApi.authenticator,
+			Auth:       gitApi.authenticator,
 		})
 		if err != nil {
 			if strings.Contains(err.Error(), "already up-to-date") {
@@ -175,7 +175,7 @@ func (gitApi GitApi) GetFileContent() map[string]map[string][]byte {
 	// read current in memory filesystem to get dirs
 	filesOrDirs, err := gitApi.inMemoryFileSystem.ReadDir("./")
 	if err != nil {
-		log.DefaultLogger.Error("inMemoryFileSystem error" , "error", err)
+		log.DefaultLogger.Error("inMemoryFileSystem error", "error", err)
 		return nil
 	}
 

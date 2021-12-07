@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
@@ -39,6 +40,26 @@ func (d *SampleDatasource) Dispose() {
 	// Clean up datasource instance resources.
 }
 
+type PullConfiguration struct {
+	Enable       bool   `json:"enable"`
+	GitBranch    string `json:"gitBranch"`
+	SyncInterval int64  `json:"syncInterval"`
+	Filter       string `json:"filter"`
+}
+
+type PushConfiguration struct {
+	PullConfiguration
+	TagPattern string `json:"tagPattern"`
+	PushTags   bool   `json:"pushTags"`
+}
+
+type SynchronizeOptions struct {
+	GrafanaUrl        string            `json:"grafanaUrl"`
+	GitUrl            string            `json:"gitUrl"`
+	PushConfiguration PushConfiguration `json:"pushConfiguration"`
+	PullConfiguration PullConfiguration `json:"pullConfiguration"`
+}
+
 // CheckHealth handles health checks sent from Grafana to the plugin.
 // The main use case for these health checks is the test button on the
 // datasource configuration page which allows users to verify that
@@ -46,7 +67,7 @@ func (d *SampleDatasource) Dispose() {
 func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	log.DefaultLogger.Debug("Backend called with following request", "request", req)
 
-	uiProperties := make(map[string]string)
+	var uiProperties SynchronizeOptions
 	_ = json.Unmarshal(req.PluginContext.DataSourceInstanceSettings.JSONData, &uiProperties)
 	uiSecureProperties := req.PluginContext.DataSourceInstanceSettings.DecryptedSecureJSONData
 
@@ -62,41 +83,37 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 
 	// TODO: Set workflow cron job?
 
-	token := uiSecureProperties["token"]
-	grafanaUrl := uiProperties["grafanaURL"]
-	pushGitURL := uiProperties["gitPushURL"]
-	pullGitURL := uiProperties["gitPullURL"]
-	privateKeyFilePath := uiSecureProperties["privateKeyFilePath"]
-	dashboardTag := uiProperties["tag"]
-	push := uiProperties["push"]
-	pull := uiProperties["pull"]
+	grafanaUrl := uiProperties.GrafanaUrl
+	token := uiSecureProperties["grafanaApiToken"]
+
+	gitUrl := uiProperties.GitUrl
+	dashboardTag := uiProperties.PushConfiguration.TagPattern
+	privateKey := []byte(uiSecureProperties["privateSshKey"])
+
+	// privateKeyFilePath := uiSecureProperties["privateKeyFilePath"]
 
 	grafanaApi := NewGrafanaApi(grafanaUrl, token)
 
-	if pull == "true" {
-		log.DefaultLogger.Info("Pull from git repo", "url", pullGitURL)
+	gitApi := NewGitApi(uiProperties.GitUrl, privateKey)
+	log.DefaultLogger.Info("Using Git repository from: %s", uiProperties.GitUrl)
 
-		gitApi := NewGitApi(pullGitURL, privateKeyFilePath)
-		repository, err := gitApi.CloneRepo()
-		if err != nil {
-			return nil, err
-		}
-		gitApi.FetchRepo(*repository)
+	repository, err := gitApi.CloneRepo()
+	if err != nil {
+		return nil, err
+	}
+	gitApi.FetchRepo(*repository)
+
+	if uiProperties.PullConfiguration.Enable {
+		log.DefaultLogger.Info("Pull from git repo", "url", gitUrl)
+
 		gitApi.PullRepo(*repository)
 		fileMap := gitApi.GetFileContent()
 		grafanaApi.CreateDashboardObjects(fileMap)
 		log.DefaultLogger.Info("Dashboards created")
 	}
 
-	if push == "true" {
-		log.DefaultLogger.Info("Push to git repo", "url", pushGitURL)
-
-		gitApi := NewGitApi(pushGitURL, privateKeyFilePath)
-		repository, err := gitApi.CloneRepo()
-		if err != nil {
-			return nil, err
-		}
-		gitApi.FetchRepo(*repository)
+	if uiProperties.PushConfiguration.Enable {
+		log.DefaultLogger.Info("Push to git repo", "url", gitUrl)
 
 		dashboards, err := grafanaApi.SearchDashboardsWithTag(dashboardTag)
 		if err != nil {
