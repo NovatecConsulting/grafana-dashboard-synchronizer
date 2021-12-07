@@ -12,6 +12,7 @@ import (
 	"gopkg.in/src-d/go-git.v4/storage/memory"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -90,9 +91,10 @@ func (gitApi GitApi) FetchRepo(repository git.Repository) {
 		RemoteName: "origin",
 		Auth: gitApi.authenticator,
 	})
-	if err != nil {
+	if strings.Contains(err.Error(), "already up-to-date") {
+		log.DefaultLogger.Info("fetching completed", "message", err.Error())
+	} else {
 		log.DefaultLogger.Error("fetch error", "fetchMessage", err)
-		return
 	}
 }
 
@@ -121,7 +123,7 @@ func (gitApi GitApi) CommitWorktree(repository git.Repository, tag string) {
 		wStatus, _ := w.Status()
 		log.DefaultLogger.Debug("worktree status" , "status", wStatus)
 
-		_, err := w.Commit("Dashboards synced with tag <" + tag + ">", &git.CommitOptions{
+		_, err := w.Commit("Synchronized Dashboards with tag <" + tag + ">", &git.CommitOptions{
 			Author: (*object2.Signature)(&object.Signature{
 				Name:  "grafana-dashboard-sync-plugin",
 				When:  time.Now(),
@@ -152,7 +154,6 @@ func (gitApi GitApi) PullRepo(repository git.Repository) {
 	w, err := repository.Worktree()
 	if err != nil {
 		log.DefaultLogger.Error("worktree error" , "error", err)
-		return
 	} else {
 		log.DefaultLogger.Debug("Pulling from Repo")
 		err := w.Pull(&git.PullOptions{
@@ -160,8 +161,11 @@ func (gitApi GitApi) PullRepo(repository git.Repository) {
 			Auth: gitApi.authenticator,
 		})
 		if err != nil {
-			log.DefaultLogger.Error("pull error", "error", err.Error())
-			return
+			if strings.Contains(err.Error(), "already up-to-date") {
+				log.DefaultLogger.Info("pulling completed", "message", err.Error())
+			} else {
+				log.DefaultLogger.Error("pull error", "error", err.Error())
+			}
 		}
 	}
 }
