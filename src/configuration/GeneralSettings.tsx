@@ -59,7 +59,7 @@ export const GeneralSettings: React.FC<OptionsChange> = ({ options, onChange }) 
         ) : (
           <Input
             className="width-20"
-            placeholder="eyJrIjoidmhCY1A1R0pSWWxtbzcycm5lVng3YTQ5bmUzdXlaVGwiLCJuIjoidGVzdCIsImlkIjoxfQ=="
+            placeholder="eyJrIjoidmhCY..."
             value={options.secureJsonData?.grafanaApiToken}
             onChange={onTokenChangeFactory()}
           />
