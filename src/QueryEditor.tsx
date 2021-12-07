@@ -1,10 +1,10 @@
 import React, { PureComponent } from 'react';
-import { QueryEditorProps } from '@grafana/data';
+import { DataQuery, QueryEditorProps } from '@grafana/data';
 import { DataSource } from './datasource';
-import { MyDataSourceOptions, MyQuery } from './types';
+import { SynchronizeOptions } from './types';
 import { InfoBox } from '@grafana/ui';
 
-type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>;
+type Props = QueryEditorProps<DataSource, DataQuery, SynchronizeOptions>;
 
 export class QueryEditor extends PureComponent<Props> {
   render() {
