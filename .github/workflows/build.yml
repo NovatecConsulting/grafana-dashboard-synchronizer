@@ -12,10 +12,14 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.17.3'
-      - name: Install Plugin Backend
+      - name: Install Go Dependencies
         run: |
           go mod tidy
-          mage -v
+      - name: Install Plugin Backend
+        uses: magefile/mage-action@v1
+        with:
+          version: latest
+          args: -v
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
