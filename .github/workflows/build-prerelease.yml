@@ -1,4 +1,4 @@
-name: Build Data Source
+name: Build Prerelease Version
 on:
   push:
     branches:
