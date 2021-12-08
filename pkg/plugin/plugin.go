@@ -123,10 +123,7 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 		}
 		for _, dashboard := range dashboards {
 			// get dashboard Object and Properties
-			dashboardObject, boardProperties, err := grafanaApi.GetDashboardObjectByID(dashboard.UID)
-			if err != nil {
-				log.DefaultLogger.Error("get dashboard", "error", err.Error())
-			}
+			dashboardObject, boardProperties := grafanaApi.GetDashboardObjectByUID(dashboard.UID)
 
 			// delete Tag from dashboard Object
 			dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
@@ -153,9 +150,8 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 		if len(dashboards) > 0 {
 			gitApi.CommitWorktree(*repository, dashboardTag)
 			gitApi.PushRepo(*repository)
+			log.DefaultLogger.Info("Dashboards pushed successfully")
 		}
-
-		log.DefaultLogger.Info("Dashboards pushed successfully")
 	}
 
 	return &backend.CheckHealthResult{
