@@ -4,7 +4,7 @@ on:
     branches:
       - main
 jobs:
-  build-plugin:
+  build-prerelease:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -40,6 +40,7 @@ jobs:
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
           prerelease: true
           title: "Development Build ${{ steps.package-version.outputs.current-version}}-${{ github.run_number }}"
           files: |
