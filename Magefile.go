@@ -1,4 +1,5 @@
-//+build mage
+//go:build mage
+// +build mage
 
 package main
 
@@ -14,4 +15,4 @@ func Hello() {
 }
 
 // Default configures the default target.
-var Default = build.BuildAll
+var Default = build.Build.LinuxARM64
