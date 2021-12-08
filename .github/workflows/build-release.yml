@@ -1,0 +1,47 @@
+name: Build Data Source
+on:
+  push:
+    branches:
+      - main2
+jobs:
+  build-prerelease:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Get Package Version
+        id: package-version
+        uses: martinbeentjes/npm-get-version-action@master
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14.18.2'
+      - name: Update Version
+        run: npm version ${{ steps.package-version.outputs.current-version}}-${{ github.run_number }} --no-git-tag-version
+      - name: Install Plugin Frontend
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17.3'
+      - name: Install Go Dependencies
+        run: |
+          go mod tidy
+      - name: Install Plugin Backend
+        uses: magefile/mage-action@v1
+        with:
+          version: latest
+          args: -v
+      - uses: papeloto/action-zip@v1
+        with:
+          files: dist/
+          dest: novatec-dashboardsync-datasource.zip
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Development Build ${{ steps.package-version.outputs.current-version}}-${{ github.run_number }}"
+          files: |
+            novatec-dashboardsync-datasource.zip
