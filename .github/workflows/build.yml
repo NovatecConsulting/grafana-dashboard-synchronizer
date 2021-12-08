@@ -12,14 +12,14 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.17.3'
+      - name: Install Mage
+        uses: nickhstr/action-setup-mage@v1.0.0
+        with:
+          version: '1.11.0'
       - name: Install Go Dependencies
         run: |
           go mod tidy
-      - name: Install Plugin Backend
-        uses: magefile/mage-action@v1
-        with:
-          version: latest
-          args: -v
+          mage -v
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
@@ -28,3 +28,7 @@ jobs:
         run: |
           yarn install --frozen-lockfile
           yarn build
+      - uses: papeloto/action-zip@v1
+        with:
+          files: dist/
+          dest: novatec-dashboardsync-datasource_${{ github.run_number }}.zip
