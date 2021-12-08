@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"gopkg.in/src-d/go-git.v4/plumbing"
 	"io/ioutil"
 	"strings"
 	"time"
@@ -62,11 +63,12 @@ func createInMemory() (*memory.Storage, billy.Filesystem) {
 }
 
 // CloneRepo clones the gitApi.gitUrls repository
-func (gitApi GitApi) CloneRepo() (*git.Repository, error) {
+func (gitApi GitApi) CloneRepo(branchName string) (*git.Repository, error) {
 	// git clone
 	r, err := git.Clone(&gitApi.inMemoryStore, gitApi.inMemoryFileSystem, &git.CloneOptions{
 		URL:  gitApi.gitUrl,
 		Auth: gitApi.authenticator,
+		ReferenceName: plumbing.NewBranchReferenceName(branchName),
 	})
 	if err != nil {
 		log.DefaultLogger.Error("clone error", "error", err)

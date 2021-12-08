@@ -96,16 +96,16 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 	gitApi := NewGitApi(uiProperties.GitUrl, privateKey)
 	log.DefaultLogger.Info("Using Git repository from: %s", uiProperties.GitUrl)
 
-	// clone and fetch repo
-	repository, err := gitApi.CloneRepo()
-	if err != nil {
-		return nil, err
-	}
-	gitApi.FetchRepo(*repository)
-
 	// Pull
 	if uiProperties.PullConfiguration.Enable {
 		log.DefaultLogger.Info("Pull from git repo", "url", gitUrl)
+
+		// clone and fetch repo from specific branch
+		repository, err := gitApi.CloneRepo(uiProperties.PullConfiguration.GitBranch)
+		if err != nil {
+			return nil, err
+		}
+		gitApi.FetchRepo(*repository)
 
 		gitApi.PullRepo(*repository)
 		fileMap := gitApi.GetFileContent()
@@ -148,6 +148,13 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 		}
 
 		if len(dashboards) > 0 {
+			// clone and fetch repo from specific branch
+			repository, err := gitApi.CloneRepo(uiProperties.PushConfiguration.GitBranch)
+			if err != nil {
+				return nil, err
+			}
+			gitApi.FetchRepo(*repository)
+
 			gitApi.CommitWorktree(*repository, dashboardTag)
 			gitApi.PushRepo(*repository)
 			log.DefaultLogger.Info("Dashboards pushed successfully")
