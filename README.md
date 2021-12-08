@@ -74,6 +74,15 @@ docker-compose up
 
 Under datasources the Grafana Dashboard Plugin Sync should be available now
 
+## Releasing the Plugin
+
+The release process of the plugin is automated using Github Actions.
+On each push to the main branch, a new prerelease is created and the corresponding commit is tagged "latest".
+Old prereleases will be deleted.
+
+To create a normal release, the commit that is used as the basis for the release must be tagged with the following format: `v*.*.*`.
+After that, the release is built and created with the version number extracted from the tag.
+
 ## Learn more
 
 - [Build a data source backend plugin tutorial](https://grafana.com/tutorials/build-a-data-source-backend-plugin)

@@ -4,7 +4,7 @@ on:
     tags:
       - 'v*.*.*'
 jobs:
-  build-prerelease:
+  build-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -42,8 +42,8 @@ jobs:
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
-          prerelease: true
+          automatic_release_tag: "v${{ env.RELEASE_VERSION }}"
+          prerelease: false
           title: "Version ${{ env.RELEASE_VERSION }}"
           files: |
             novatec-dashboardsync-datasource.zip
