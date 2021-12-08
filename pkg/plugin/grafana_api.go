@@ -43,13 +43,20 @@ func (grafanaApi GrafanaApi) GetDashboardObjectByID(uid string) (sdk.Board, sdk.
 	return dashboardObject, props, err
 }
 
-// UpdateDashboardObjectByID update the Dashboard with the given dashboard object
-func (grafanaApi GrafanaApi) UpdateDashboardObjectByID(dashboard sdk.Board, folderId int) (sdk.StatusMessage, error) {
-	statusMessage, err := grafanaApi.grafanaClient.SetDashboard(context.Background(), dashboard, sdk.SetDashboardParams{
-		Overwrite: false,
-		FolderID:  folderId,
+// CreateOrUpdateDashboardObjectByID create or update the Dashboard with the given dashboard object
+func (grafanaApi GrafanaApi) CreateOrUpdateDashboardObjectByID(rawDashboard []byte, folderId int, message string) (sdk.StatusMessage) {
+	statusMessage, err := grafanaApi.grafanaClient.SetRawDashboardWithParam(context.Background(), sdk.RawBoardRequest{
+		Dashboard: rawDashboard,
+		Parameters: sdk.SetDashboardParams{
+			Overwrite: true,
+			FolderID:  folderId,
+			Message:   message,
+		},
 	})
-	return statusMessage, err
+	if err != nil {
+		log.DefaultLogger.Error("set dashboard error", "error", err.Error())
+	}
+	return statusMessage
 }
 
 // CreateFolder create a folder in Grafana
@@ -130,7 +137,7 @@ func (grafanaApi GrafanaApi) parseGetDashboardError(error error, gitBoardID int,
 // CreateDashboardObjects set a Dashboard with the given raw dashboard object
 func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[string][]byte) {
 	for dashboardDir, dashboardFile := range fileMap {
-		dirID := grafanaApi.GetOrCreateFolderID(dashboardDir)
+		folderID := grafanaApi.GetOrCreateFolderID(dashboardDir)
 		for dashboardName, rawDashboard := range dashboardFile {
 			gitDashboardObject := getDashboardObjectFromRawDashboard(rawDashboard)
 			// get grafana dashboard to compare version with git dashboard
@@ -138,17 +145,7 @@ func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[strin
 			grafanaDashboardVersionMessageId := grafanaApi.parseGetDashboardError(err, int(gitDashboardObject.ID), int(grafanaDashboardObject.ID))
 
 			if grafanaDashboardVersionMessageId != int(gitDashboardObject.Version) {
-				_, err := grafanaApi.grafanaClient.SetRawDashboardWithParam(context.Background(), sdk.RawBoardRequest{
-					Dashboard: rawDashboard,
-					Parameters: sdk.SetDashboardParams{
-						Overwrite: true,
-						FolderID:  dirID,
-						Message:   "Synchronized from Version " + strconv.Itoa(int(gitDashboardObject.Version)),
-					},
-				})
-				if err != nil {
-					log.DefaultLogger.Error("set dashboard error", "error", err.Error())
-				}
+				grafanaApi.CreateOrUpdateDashboardObjectByID(rawDashboard, folderID, "Synchronized from Version " + strconv.Itoa(int(gitDashboardObject.Version)))
 				log.DefaultLogger.Debug("Dashboard created", "name", dashboardName)
 			} else {
 				log.DefaultLogger.Info("Dashboard already up-to-date", "name", dashboardName)

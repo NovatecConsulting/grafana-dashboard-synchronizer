@@ -39,11 +39,6 @@ func NewGitApi(gitUrl string, privateKey []byte) GitApi {
 // helper function to create the git authenticator
 func createAuthenticator(privateKey []byte) (*ssh.PublicKeys, error) {
 	// git authentication with ssh
-	// _, err := os.Stat(privateKeyFilePath)
-	// if err != nil {
-	// 	log.DefaultLogger.Error("read file failed", privateKeyFilePath, err.Error())
-	// 	return nil, err
-	// }
 	authenticator, err := ssh.NewPublicKeys("git", privateKey, "")
 	if err != nil {
 		log.DefaultLogger.Error("generate public keys failed", "error", err.Error())
