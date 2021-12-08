@@ -1,6 +1,6 @@
 import React, { FormEvent, MouseEvent } from 'react';
 import { Button, InlineField, Input } from '@grafana/ui';
-import { OptionsChange } from 'types';
+import { OptionsChange, SecureSynchronizeOptions } from 'types';
 
 export const GeneralSettings: React.FC<OptionsChange> = ({ options, onChange }) => {
   const hasToken = options.secureJsonFields?.grafanaApiToken;
@@ -16,7 +16,7 @@ export const GeneralSettings: React.FC<OptionsChange> = ({ options, onChange }) 
   };
 
   const onTokenChangeFactory = () => (event: FormEvent<HTMLInputElement>) => {
-    const newSecureJsonData = { ...options.secureJsonData };
+    const newSecureJsonData: SecureSynchronizeOptions = { ...options.secureJsonData };
     newSecureJsonData.grafanaApiToken = event.currentTarget.value;
 
     onChange({
@@ -39,7 +39,16 @@ export const GeneralSettings: React.FC<OptionsChange> = ({ options, onChange }) 
     <div className="gf-form-group">
       <h3 className="page-heading">General</h3>
 
-      <InlineField label="Grafana URL" labelWidth={20} tooltip="The URL to access the local Grafana instance.">
+      <InlineField
+        label="Grafana URL"
+        labelWidth={20}
+        tooltip={
+          <>
+            The URL where the data source can reach the API of the local Grafana instance. In most cases this will be{' '}
+            <code>http://localhost:3000</code>.
+          </>
+        }
+      >
         <Input
           className="width-20"
           placeholder="http://localhost:3000/"

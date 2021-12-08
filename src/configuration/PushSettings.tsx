@@ -40,7 +40,7 @@ export const PushSettings: React.FC<OptionsChange> = ({ options, onChange }) => 
           <InlineField
             label="Selector-Tag"
             labelWidth={20}
-            tooltip="Defines a pattern (regular expression) for a tag to match in order to synchronize the associated dashboard."
+            tooltip="Defines the tag to match in order to synchronize the associated dashboard."
           >
             <Input
               className="width-20"

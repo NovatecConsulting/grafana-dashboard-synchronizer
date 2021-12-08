@@ -1,6 +1,6 @@
 import React, { FormEvent, MouseEvent } from 'react';
 import { Button, InlineField, Input, TextArea } from '@grafana/ui';
-import { OptionsChange } from 'types';
+import { OptionsChange, SecureSynchronizeOptions } from 'types';
 
 export const GitSettings: React.FC<OptionsChange> = ({ options, onChange }) => {
   const hasSshKey = !!options.secureJsonFields?.privateSshKey;
@@ -16,7 +16,7 @@ export const GitSettings: React.FC<OptionsChange> = ({ options, onChange }) => {
   };
 
   const onKeyChangeFactory = () => (event: FormEvent<HTMLTextAreaElement>) => {
-    const newSecureJsonData = { ...options.secureJsonData };
+    const newSecureJsonData: SecureSynchronizeOptions = { ...options.secureJsonData };
     newSecureJsonData.privateSshKey = event.currentTarget.value;
 
     onChange({
