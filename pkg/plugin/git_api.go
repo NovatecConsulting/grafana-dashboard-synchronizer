@@ -145,8 +145,8 @@ func (gitApi GitApi) PushRepo(repository git.Repository) {
 	}
 }
 
-// PullRepo pull the given repository
-func (gitApi GitApi) PullRepo(repository git.Repository) {
+// PullRepo pull the given repository and returns the latest commit ID
+func (gitApi GitApi) PullRepo(repository git.Repository) string {
 	// pull repo
 	w, err := repository.Worktree()
 	if err != nil {
@@ -165,6 +165,12 @@ func (gitApi GitApi) PullRepo(repository git.Repository) {
 			}
 		}
 	}
+	// retrieves the branch pointed by HEAD
+	ref, err := repository.Head()
+
+	// get the commit object, pointed by ref
+	commit, err := repository.CommitObject(ref.Hash())
+	return commit.ID().String()
 }
 
 // GetFileContent get the given content of a file from the in memory filesystem

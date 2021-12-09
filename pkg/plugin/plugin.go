@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
@@ -107,9 +106,9 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 		}
 		gitApi.FetchRepo(*repository)
 
-		gitApi.PullRepo(*repository)
+		latestCommitID := gitApi.PullRepo(*repository)
 		fileMap := gitApi.GetFileContent()
-		grafanaApi.CreateDashboardObjects(fileMap)
+		grafanaApi.CreateDashboardObjects(fileMap, latestCommitID)
 		log.DefaultLogger.Info("Pull process finished and dashboards created")
 	}
 
@@ -139,14 +138,14 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 			folderId := boardProperties.FolderID
 
 			// get raw Json Dashboard, required for import and export
-			dashboardJson, err := json.Marshal(dashboardWithDeletedTag)
+			dashboardJson, err := json.Marshal(DashboardWithCustomFields{dashboardWithDeletedTag, req.PluginContext.DataSourceInstanceSettings.Name})
 			if err != nil {
 				log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
 			}
 
 			// update dashboard with deleted Tag in Grafana
 			grafanaApi.CreateOrUpdateDashboardObjectByID(dashboardJson, folderId, fmt.Sprintf("Deleted '%s' tag", dashboardTag))
-			log.DefaultLogger.Debug("Dashboard preparation successfully ")
+			log.DefaultLogger.Debug("Dashboard preparation successfully")
 
 			// Add Dashboard to in memory file system
 			gitApi.AddFileWithContent(folderName+"/"+dashboardObject.Title+".json", string(dashboardJson))

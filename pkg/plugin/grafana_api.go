@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -14,6 +15,11 @@ import (
 // GrafanaApi access to grafana api
 type GrafanaApi struct {
 	grafanaClient *sdk.Client
+}
+
+type DashboardWithCustomFields struct {
+	sdk.Board
+	OriginalDataSourceName string `json:"originalDataSourceName"`
 }
 
 // NewGrafanaApi creates a new GrafanaApi instance
@@ -86,8 +92,8 @@ func (grafanaApi GrafanaApi) GetOrCreateFolderID(folderName string) int {
 }
 
 // getDashboardObjectFromRawDashboard get the dashboard object from a raw dashboard json
-func getDashboardObjectFromRawDashboard(rawDashboard []byte) sdk.Board {
-	var dashboard sdk.Board
+func getDashboardObjectFromRawDashboard(rawDashboard []byte) DashboardWithCustomFields {
+	var dashboard DashboardWithCustomFields
 	err := json.Unmarshal(rawDashboard, &dashboard)
 	if err != nil {
 		log.DefaultLogger.Error("unmarshal raw dashboard error", "error", err.Error())
@@ -116,7 +122,7 @@ func getDashboardObjectFromRawDashboard(rawDashboard []byte) sdk.Board {
 //}
 
 // CreateDashboardObjects set a Dashboard with the given raw dashboard object
-func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[string][]byte) {
+func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[string][]byte, latestCommitID string) {
 	// for each folder
 	for dashboardDir, dashboardFile := range fileMap {
 		// get Grafana folder ID or create if not exists
@@ -132,7 +138,8 @@ func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[strin
 			grafanaDashboardObject.ID = gitDashboardObject.ID
 
 			if !reflect.DeepEqual(grafanaDashboardObject, gitDashboardObject) {
-				grafanaApi.CreateOrUpdateDashboardObjectByID(gitRawDashboard, folderID, "Synchronized from Version " + strconv.Itoa(int(gitDashboardObject.Version)))
+				versionMessage := fmt.Sprintf("Synchronized from '%s' Data Source with Version '%s' and commit ID '%s'", gitDashboardObject.OriginalDataSourceName, strconv.Itoa(int(gitDashboardObject.Version)), latestCommitID)
+				grafanaApi.CreateOrUpdateDashboardObjectByID(gitRawDashboard, folderID, versionMessage)
 				log.DefaultLogger.Debug("Dashboard created", "name", gitDashboardName)
 			} else {
 				log.DefaultLogger.Debug("Dashboard already up-to-date", "name", gitDashboardName)
