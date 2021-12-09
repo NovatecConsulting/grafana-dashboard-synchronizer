@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
@@ -71,46 +72,18 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 	_ = json.Unmarshal(req.PluginContext.DataSourceInstanceSettings.JSONData, &uiProperties)
 	uiSecureProperties := req.PluginContext.DataSourceInstanceSettings.DecryptedSecureJSONData
 
-	var status = backend.HealthStatusOk
-	var message = "Data source is working yeah"
-
-	// TODO Git health check
-	// random error disabled:
-	//if rand.Int()%2 == 0 {
-	//	status = backend.HealthStatusError
-	//	message = "randomized error"
-	//}
-
 	// TODO: Set workflow cron job?
 
 	grafanaUrl := uiProperties.GrafanaUrl
 	token := uiSecureProperties["grafanaApiToken"]
 
 	gitUrl := uiProperties.GitUrl
-	dashboardTag := uiProperties.PushConfiguration.TagPattern
 	privateKey := []byte(uiSecureProperties["privateSshKey"])
 
+	dashboardTag := uiProperties.PushConfiguration.TagPattern
+
 	grafanaApi := NewGrafanaApi(grafanaUrl, token)
-
 	gitApi := NewGitApi(uiProperties.GitUrl, privateKey)
-	log.DefaultLogger.Info("Using Git repository from: %s", uiProperties.GitUrl)
-
-	// Pull
-	if uiProperties.PullConfiguration.Enable {
-		log.DefaultLogger.Info("Pull from git repo", "url", gitUrl)
-
-		// clone and fetch repo from specific branch
-		repository, err := gitApi.CloneRepo(uiProperties.PullConfiguration.GitBranch)
-		if err != nil {
-			return nil, err
-		}
-		gitApi.FetchRepo(*repository)
-
-		latestCommitID := gitApi.PullRepo(*repository)
-		fileMap := gitApi.GetFileContent()
-		grafanaApi.CreateDashboardObjects(fileMap, latestCommitID)
-		log.DefaultLogger.Info("Pull process finished and dashboards created")
-	}
 
 	// Push
 	if uiProperties.PushConfiguration.Enable {
@@ -161,8 +134,46 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 		}
 	}
 
+	// Pull
+	if uiProperties.PullConfiguration.Enable {
+		errorResult := d.PullDashboards(grafanaApi, gitApi, gitUrl, uiProperties.PullConfiguration.GitBranch)
+		if errorResult != nil {
+			return errorResult, nil
+		}
+	}
+
 	return &backend.CheckHealthResult{
-		Status:  status,
-		Message: message,
+		Status:  backend.HealthStatusOk,
+		Message: "Dashboards have been synchronized",
 	}, nil
+}
+
+func (d *SampleDatasource) PullDashboards(grafanaApi GrafanaApi, gitApi GitApi, repositoryUrl string, branch string) *backend.CheckHealthResult {
+	log.DefaultLogger.Info("Pulling and importing dashboards", "repositoryUrl", repositoryUrl, "branch", branch)
+
+	// clone and fetch repo from specific branch
+	log.DefaultLogger.Debug("Cloning repository")
+	repository, err := gitApi.CloneRepo(branch)
+	if err != nil {
+		log.DefaultLogger.Error("Cloning repository failed", "error", err)
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "Could not clone specified Git repository",
+		}
+	}
+
+	commitId, err, errMessage := gitApi.GetLatestCommitId(*repository)
+	if err != nil {
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "Error getting latest commit: " + errMessage,
+		}
+	}
+
+	fileMap := gitApi.GetFileContent()
+	grafanaApi.CreateOrUpdateDashboard(fileMap, commitId)
+
+	log.DefaultLogger.Info("Successfully synchronized dashboards from Git repositroy")
+
+	return nil
 }

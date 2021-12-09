@@ -19,7 +19,7 @@ type GrafanaApi struct {
 
 type DashboardWithCustomFields struct {
 	sdk.Board
-	OriginalDataSourceName string `json:"originalDataSourceName"`
+	SyncOrigin string `json:"syncOrigin"`
 }
 
 // NewGrafanaApi creates a new GrafanaApi instance
@@ -92,53 +92,41 @@ func (grafanaApi GrafanaApi) GetOrCreateFolderID(folderName string) int {
 }
 
 // getDashboardObjectFromRawDashboard get the dashboard object from a raw dashboard json
-func getDashboardObjectFromRawDashboard(rawDashboard []byte) DashboardWithCustomFields {
-	var dashboard DashboardWithCustomFields
+func getDashboardObjectFromRawDashboard(rawDashboard []byte) (sdk.Board, DashboardWithCustomFields) {
+	var dashboard sdk.Board
 	err := json.Unmarshal(rawDashboard, &dashboard)
 	if err != nil {
 		log.DefaultLogger.Error("unmarshal raw dashboard error", "error", err.Error())
 	}
-	return dashboard
+
+	var dashboardWCF DashboardWithCustomFields
+	err = json.Unmarshal(rawDashboard, &dashboardWCF)
+	if err != nil {
+		log.DefaultLogger.Error("unmarshal raw dashboard error", "error", err.Error())
+	}
+	return dashboard, dashboardWCF
 }
 
-//// getLatestVersionsFromDashboardById get the latest version information of a dashboard by id
-//func (grafanaApi GrafanaApi) getLatestVersionsFromDashboardById(dashboardId int) int {
-//	versionResponse, err := grafanaApi.grafanaClient.GetAllDashboardVersions(context.Background(), dashboardId, 1)
-//	if err != nil {
-//		log.DefaultLogger.Error("get dashboard versions error", "error", err.Error())
-//	}
-//
-//	// get version message
-//	latestVersion := versionResponse.Versions[0]
-//	re := regexp.MustCompile(`[-]?\d[\d,]*[\.]?[\d]*`)
-//	idFromVersionMessage := re.FindString(latestVersion.Message)
-//	log.DefaultLogger.Debug("latest ID in version message", "version", idFromVersionMessage)
-//
-//	id, err := strconv.ParseUint(idFromVersionMessage, 10, 32)
-//	if err != nil {
-//		log.DefaultLogger.Error("parsing integer error", "error", err.Error())
-//	}
-//	return int(id)
-//}
-
-// CreateDashboardObjects set a Dashboard with the given raw dashboard object
-func (grafanaApi GrafanaApi) CreateDashboardObjects(fileMap map[string]map[string][]byte, latestCommitID string) {
+// CreateOrUpdateDashboard set a Dashboard with the given raw dashboard object
+func (grafanaApi GrafanaApi) CreateOrUpdateDashboard(fileMap map[string]map[string][]byte, currentCommitId string) {
 	// for each folder
 	for dashboardDir, dashboardFile := range fileMap {
 		// get Grafana folder ID or create if not exists
 		folderID := grafanaApi.GetOrCreateFolderID(dashboardDir)
 		// for each dashboard within folder
 		for gitDashboardName, gitRawDashboard := range dashboardFile {
-			// get git and grafana dashboard object for comparison
-			gitDashboardObject := getDashboardObjectFromRawDashboard(gitRawDashboard)
-			grafanaDashboardObject, _ := grafanaApi.GetDashboardObjectByUID(gitDashboardObject.UID)
+			// get dashboards from Git and Grafana for comparison
+			gitDashboard, gitDashboardExtended := getDashboardObjectFromRawDashboard(gitRawDashboard)
+			grafanaDashboard, _ := grafanaApi.GetDashboardObjectByUID(gitDashboard.UID)
 
-			// First, 'Version' and 'Dashboard ID' need to be set equal, as they are fundamentally different because of import mechanisms
-			grafanaDashboardObject.Version = gitDashboardObject.Version
-			grafanaDashboardObject.ID = gitDashboardObject.ID
+			syncOrigin := gitDashboardExtended.SyncOrigin
 
-			if !reflect.DeepEqual(grafanaDashboardObject, gitDashboardObject) {
-				versionMessage := fmt.Sprintf("Synchronized from '%s' Data Source with Version '%s' and commit ID '%s'", gitDashboardObject.OriginalDataSourceName, strconv.Itoa(int(gitDashboardObject.Version)), latestCommitID)
+			// 'Version' and 'Dashboard ID' need to be set equal, as they are fundamentally different because of import mechanisms
+			grafanaDashboard.Version = gitDashboard.Version
+			grafanaDashboard.ID = gitDashboard.ID
+
+			if !reflect.DeepEqual(grafanaDashboard, gitDashboard) {
+				versionMessage := fmt.Sprintf("[SYNC] Synchronized dashboard. Version '%s' from origin '%s' (commit %s).", strconv.Itoa(int(gitDashboard.Version)), syncOrigin, currentCommitId)
 				grafanaApi.CreateOrUpdateDashboardObjectByID(gitRawDashboard, folderID, versionMessage)
 				log.DefaultLogger.Debug("Dashboard created", "name", gitDashboardName)
 			} else {
