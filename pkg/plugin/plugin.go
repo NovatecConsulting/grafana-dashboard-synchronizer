@@ -117,6 +117,12 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 	if uiProperties.PushConfiguration.Enable {
 		log.DefaultLogger.Info("Push to git repo", "url", gitUrl)
 
+		// clone and fetch repo from specific branch
+		repository, err := gitApi.CloneRepo(uiProperties.PushConfiguration.GitBranch)
+		if err != nil {
+			return nil, err
+		}
+
 		dashboards, err := grafanaApi.SearchDashboardsWithTag(dashboardTag)
 		if err != nil {
 			log.DefaultLogger.Error("search dashboard", "error", err.Error())
@@ -148,11 +154,6 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 		}
 
 		if len(dashboards) > 0 {
-			// clone and fetch repo from specific branch
-			repository, err := gitApi.CloneRepo(uiProperties.PushConfiguration.GitBranch)
-			if err != nil {
-				return nil, err
-			}
 			gitApi.FetchRepo(*repository)
 
 			gitApi.CommitWorktree(*repository, dashboardTag)
