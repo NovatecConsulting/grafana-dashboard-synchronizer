@@ -68,26 +68,23 @@ type SynchronizeOptions struct {
 func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	log.DefaultLogger.Debug("Backend called with following request", "request", req)
 
-	var uiProperties SynchronizeOptions
-	_ = json.Unmarshal(req.PluginContext.DataSourceInstanceSettings.JSONData, &uiProperties)
-	uiSecureProperties := req.PluginContext.DataSourceInstanceSettings.DecryptedSecureJSONData
+	var properties SynchronizeOptions
+	_ = json.Unmarshal(req.PluginContext.DataSourceInstanceSettings.JSONData, &properties)
+	secureProperties := req.PluginContext.DataSourceInstanceSettings.DecryptedSecureJSONData
 
 	// TODO: Set workflow cron job?
 
-	grafanaUrl := uiProperties.GrafanaUrl
-	token := uiSecureProperties["grafanaApiToken"]
+	grafanaToken := secureProperties["grafanaApiToken"]
+	privateKey := []byte(secureProperties["privateSshKey"])
 
-	gitUrl := uiProperties.GitUrl
-	privateKey := []byte(uiSecureProperties["privateSshKey"])
+	dashboardTag := properties.PushConfiguration.TagPattern
 
-	dashboardTag := uiProperties.PushConfiguration.TagPattern
-
-	grafanaApi := NewGrafanaApi(grafanaUrl, token)
-	gitApi := NewGitApi(uiProperties.GitUrl, privateKey)
+	grafanaApi := NewGrafanaApi(properties.GrafanaUrl, grafanaToken)
+	gitApi := NewGitApi(properties.GitUrl, privateKey)
 
 	// Push
-	if uiProperties.PushConfiguration.Enable {
-		log.DefaultLogger.Info("Push to git repo", "url", gitUrl)
+	if properties.PushConfiguration.Enable {
+		log.DefaultLogger.Info("Push to git repo", "url", properties.GitUrl)
 
 		dashboards, err := grafanaApi.SearchDashboardsWithTag(dashboardTag)
 		if err != nil {
@@ -121,7 +118,7 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 
 		if len(dashboards) > 0 {
 			// clone repo from specific branch
-			repository, err := gitApi.CloneRepo(uiProperties.PushConfiguration.GitBranch)
+			repository, err := gitApi.CloneRepo(properties.PushConfiguration.GitBranch)
 			if err != nil {
 				return nil, err
 			}
@@ -133,8 +130,8 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 	}
 
 	// Pull
-	if uiProperties.PullConfiguration.Enable {
-		errorResult := d.PullDashboards(grafanaApi, gitApi, gitUrl, uiProperties.PullConfiguration.GitBranch)
+	if properties.PullConfiguration.Enable {
+		errorResult := d.PullDashboards(grafanaApi, gitApi, properties.GitUrl, properties.PullConfiguration.GitBranch)
 		if errorResult != nil {
 			return errorResult, nil
 		}
