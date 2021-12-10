@@ -68,98 +68,107 @@ type SynchronizeOptions struct {
 func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	log.DefaultLogger.Debug("Backend called with following request", "request", req)
 
-	var uiProperties SynchronizeOptions
-	_ = json.Unmarshal(req.PluginContext.DataSourceInstanceSettings.JSONData, &uiProperties)
-	uiSecureProperties := req.PluginContext.DataSourceInstanceSettings.DecryptedSecureJSONData
-
-	var status = backend.HealthStatusOk
-	var message = "Data source is working yeah"
-
-	// TODO Git health check
-	// random error disabled:
-	//if rand.Int()%2 == 0 {
-	//	status = backend.HealthStatusError
-	//	message = "randomized error"
-	//}
+	var properties SynchronizeOptions
+	_ = json.Unmarshal(req.PluginContext.DataSourceInstanceSettings.JSONData, &properties)
+	secureProperties := req.PluginContext.DataSourceInstanceSettings.DecryptedSecureJSONData
 
 	// TODO: Set workflow cron job?
 
-	grafanaUrl := uiProperties.GrafanaUrl
-	token := uiSecureProperties["grafanaApiToken"]
+	grafanaToken := secureProperties["grafanaApiToken"]
+	privateKey := []byte(secureProperties["privateSshKey"])
 
-	gitUrl := uiProperties.GitUrl
-	dashboardTag := uiProperties.PushConfiguration.TagPattern
-	privateKey := []byte(uiSecureProperties["privateSshKey"])
+	dashboardTag := properties.PushConfiguration.TagPattern
 
-	grafanaApi := NewGrafanaApi(grafanaUrl, token)
-
-	gitApi := NewGitApi(uiProperties.GitUrl, privateKey)
-	log.DefaultLogger.Info("Using Git repository from: %s", uiProperties.GitUrl)
-
-	// clone and fetch repo
-	repository, err := gitApi.CloneRepo()
-	if err != nil {
-		return nil, err
-	}
-	gitApi.FetchRepo(*repository)
-
-	// Pull
-	if uiProperties.PullConfiguration.Enable {
-		log.DefaultLogger.Info("Pull from git repo", "url", gitUrl)
-
-		gitApi.PullRepo(*repository)
-		fileMap := gitApi.GetFileContent()
-		grafanaApi.CreateDashboardObjects(fileMap)
-		log.DefaultLogger.Info("Pull process finished and dashboards created")
-	}
+	grafanaApi := NewGrafanaApi(properties.GrafanaUrl, grafanaToken)
+	gitApi := NewGitApi(properties.GitUrl, privateKey)
 
 	// Push
-	if uiProperties.PushConfiguration.Enable {
-		log.DefaultLogger.Info("Push to git repo", "url", gitUrl)
+	if properties.PushConfiguration.Enable {
+		log.DefaultLogger.Info("Push to git repo", "url", properties.GitUrl)
 
 		dashboards, err := grafanaApi.SearchDashboardsWithTag(dashboardTag)
 		if err != nil {
 			log.DefaultLogger.Error("search dashboard", "error", err.Error())
 		}
-		for _, dashboard := range dashboards {
-			// get dashboard Object and Properties
-			dashboardObject, boardProperties, err := grafanaApi.GetDashboardObjectByID(dashboard.UID)
-			if err != nil {
-				log.DefaultLogger.Error("get dashboard", "error", err.Error())
-			}
-
-			// delete Tag from dashboard Object
-			dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
-
-			// get folder name and id, required for update processes and git folder structure
-			folderName := boardProperties.FolderTitle
-			folderId := boardProperties.FolderID
-
-			// get raw Json Dashboard, required for import and export
-			dashboardJson, err := json.Marshal(dashboardWithDeletedTag)
-			if err != nil {
-				log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
-			}
-
-			// update dashboard with deleted Tag in Grafana
-			grafanaApi.CreateOrUpdateDashboardObjectByID(dashboardJson, folderId, fmt.Sprintf("Deleted '%s' tag", dashboardTag))
-			log.DefaultLogger.Debug("Dashboard preparation successfully ")
-
-			// Add Dashboard to in memory file system
-			gitApi.AddFileWithContent(folderName+"/"+dashboardObject.Title+".json", string(dashboardJson))
-			log.DefaultLogger.Debug("Dashboard added to in memory file system")
-		}
 
 		if len(dashboards) > 0 {
+			// clone repo from specific branch
+			repository, err := gitApi.CloneRepo(properties.PushConfiguration.GitBranch)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, dashboard := range dashboards {
+				// get dashboard Object and Properties
+				dashboardObject, boardProperties := grafanaApi.GetDashboardObjectByUID(dashboard.UID)
+
+				// delete Tag from dashboard Object
+				dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
+
+				// get folder name and id, required for update processes and git folder structure
+				folderName := boardProperties.FolderTitle
+				folderId := boardProperties.FolderID
+
+				// get raw Json Dashboard, required for import and export
+				dashboardJson, err := json.Marshal(DashboardWithCustomFields{dashboardWithDeletedTag, req.PluginContext.DataSourceInstanceSettings.Name})
+				if err != nil {
+					log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
+				}
+
+				// update dashboard with deleted Tag in Grafana
+				grafanaApi.CreateOrUpdateDashboardObjectByID(dashboardJson, folderId, fmt.Sprintf("Deleted '%s' tag", dashboardTag))
+				log.DefaultLogger.Debug("Dashboard preparation successfully")
+
+				// Add Dashboard to in memory file system
+				gitApi.AddFileWithContent(folderName+"/"+dashboardObject.Title+".json", string(dashboardJson))
+				log.DefaultLogger.Debug("Dashboard added to in memory file system")
+			}
+
 			gitApi.CommitWorktree(*repository, dashboardTag)
 			gitApi.PushRepo(*repository)
+			log.DefaultLogger.Info("Dashboards pushed successfully")
 		}
-
-		log.DefaultLogger.Info("Dashboards pushed successfully")
+	}
+	// Pull
+	if properties.PullConfiguration.Enable {
+		errorResult := d.PullDashboards(grafanaApi, gitApi, properties.GitUrl, properties.PullConfiguration.GitBranch)
+		if errorResult != nil {
+			return errorResult, nil
+		}
 	}
 
 	return &backend.CheckHealthResult{
-		Status:  status,
-		Message: message,
+		Status:  backend.HealthStatusOk,
+		Message: "Dashboards have been synchronized",
 	}, nil
+}
+
+func (d *SampleDatasource) PullDashboards(grafanaApi GrafanaApi, gitApi GitApi, repositoryUrl string, branch string) *backend.CheckHealthResult {
+	log.DefaultLogger.Info("Pulling and importing dashboards", "repositoryUrl", repositoryUrl, "branch", branch)
+
+	// clone and fetch repo from specific branch
+	log.DefaultLogger.Debug("Cloning repository")
+	repository, err := gitApi.CloneRepo(branch)
+	if err != nil {
+		log.DefaultLogger.Error("Cloning repository failed", "error", err)
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "Could not clone specified Git repository",
+		}
+	}
+
+	commitId, err, errMessage := gitApi.GetLatestCommitId(*repository)
+	if err != nil {
+		return &backend.CheckHealthResult{
+			Status:  backend.HealthStatusError,
+			Message: "Error getting latest commit: " + errMessage,
+		}
+	}
+
+	fileMap := gitApi.GetFileContent()
+	grafanaApi.CreateOrUpdateDashboard(fileMap, commitId)
+
+	log.DefaultLogger.Info("Successfully synchronized dashboards from Git repositroy")
+
+	return nil
 }
