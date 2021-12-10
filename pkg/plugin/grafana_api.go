@@ -92,19 +92,13 @@ func (grafanaApi GrafanaApi) GetOrCreateFolderID(folderName string) int {
 }
 
 // getDashboardObjectFromRawDashboard get the dashboard object from a raw dashboard json
-func getDashboardObjectFromRawDashboard(rawDashboard []byte) (sdk.Board, DashboardWithCustomFields) {
-	var dashboard sdk.Board
-	err := json.Unmarshal(rawDashboard, &dashboard)
-	if err != nil {
-		log.DefaultLogger.Error("unmarshal raw dashboard error", "error", err.Error())
-	}
-
+func getDashboardObjectFromRawDashboard(rawDashboard []byte) DashboardWithCustomFields {
 	var dashboardWCF DashboardWithCustomFields
-	err = json.Unmarshal(rawDashboard, &dashboardWCF)
+	err := json.Unmarshal(rawDashboard, &dashboardWCF)
 	if err != nil {
 		log.DefaultLogger.Error("unmarshal raw dashboard error", "error", err.Error())
 	}
-	return dashboard, dashboardWCF
+	return dashboardWCF
 }
 
 // CreateOrUpdateDashboard set a Dashboard with the given raw dashboard object
@@ -116,17 +110,19 @@ func (grafanaApi GrafanaApi) CreateOrUpdateDashboard(fileMap map[string]map[stri
 		// for each dashboard within folder
 		for gitDashboardName, gitRawDashboard := range dashboardFile {
 			// get dashboards from Git and Grafana for comparison
-			gitDashboard, gitDashboardExtended := getDashboardObjectFromRawDashboard(gitRawDashboard)
-			grafanaDashboard, _ := grafanaApi.GetDashboardObjectByUID(gitDashboard.UID)
+			gitDashboardExtended := getDashboardObjectFromRawDashboard(gitRawDashboard)
+			grafanaDashboard, _ := grafanaApi.GetDashboardObjectByUID(gitDashboardExtended.UID)
 
 			syncOrigin := gitDashboardExtended.SyncOrigin
 
 			// 'Version' and 'Dashboard ID' need to be set equal, as they are fundamentally different because of import mechanisms
-			grafanaDashboard.Version = gitDashboard.Version
-			grafanaDashboard.ID = gitDashboard.ID
+			grafanaDashboard.Version = gitDashboardExtended.Version
+			grafanaDashboard.ID = gitDashboardExtended.ID
+			// 'SyncOrigin' need to be set, because custom fields are lost through the import
+			grafanaDashboardExtended := DashboardWithCustomFields{grafanaDashboard, gitDashboardExtended.SyncOrigin}
 
-			if !reflect.DeepEqual(grafanaDashboard, gitDashboard) {
-				versionMessage := fmt.Sprintf("[SYNC] Synchronized dashboard. Version '%s' from origin '%s' (commit %s).", strconv.Itoa(int(gitDashboard.Version)), syncOrigin, currentCommitId)
+			if !reflect.DeepEqual(grafanaDashboardExtended, gitDashboardExtended) {
+				versionMessage := fmt.Sprintf("[SYNC] Synchronized dashboard. Version '%s' from origin '%s' (commit %s).", strconv.Itoa(int(gitDashboardExtended.Version)), syncOrigin, currentCommitId)
 				grafanaApi.CreateOrUpdateDashboardObjectByID(gitRawDashboard, folderID, versionMessage)
 				log.DefaultLogger.Debug("Dashboard created", "name", gitDashboardName)
 			} else {

@@ -90,31 +90,6 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 		if err != nil {
 			log.DefaultLogger.Error("search dashboard", "error", err.Error())
 		}
-		for _, dashboard := range dashboards {
-			// get dashboard Object and Properties
-			dashboardObject, boardProperties := grafanaApi.GetDashboardObjectByUID(dashboard.UID)
-
-			// delete Tag from dashboard Object
-			dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
-
-			// get folder name and id, required for update processes and git folder structure
-			folderName := boardProperties.FolderTitle
-			folderId := boardProperties.FolderID
-
-			// get raw Json Dashboard, required for import and export
-			dashboardJson, err := json.Marshal(DashboardWithCustomFields{dashboardWithDeletedTag, req.PluginContext.DataSourceInstanceSettings.Name})
-			if err != nil {
-				log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
-			}
-
-			// update dashboard with deleted Tag in Grafana
-			grafanaApi.CreateOrUpdateDashboardObjectByID(dashboardJson, folderId, fmt.Sprintf("Deleted '%s' tag", dashboardTag))
-			log.DefaultLogger.Debug("Dashboard preparation successfully")
-
-			// Add Dashboard to in memory file system
-			gitApi.AddFileWithContent(folderName+"/"+dashboardObject.Title+".json", string(dashboardJson))
-			log.DefaultLogger.Debug("Dashboard added to in memory file system")
-		}
 
 		if len(dashboards) > 0 {
 			// clone repo from specific branch
@@ -123,12 +98,37 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 				return nil, err
 			}
 
+			for _, dashboard := range dashboards {
+				// get dashboard Object and Properties
+				dashboardObject, boardProperties := grafanaApi.GetDashboardObjectByUID(dashboard.UID)
+
+				// delete Tag from dashboard Object
+				dashboardWithDeletedTag := grafanaApi.DeleteTagFromDashboardObjectByID(dashboardObject, dashboardTag)
+
+				// get folder name and id, required for update processes and git folder structure
+				folderName := boardProperties.FolderTitle
+				folderId := boardProperties.FolderID
+
+				// get raw Json Dashboard, required for import and export
+				dashboardJson, err := json.Marshal(DashboardWithCustomFields{dashboardWithDeletedTag, req.PluginContext.DataSourceInstanceSettings.Name})
+				if err != nil {
+					log.DefaultLogger.Error("get raw dashboard", "error", err.Error())
+				}
+
+				// update dashboard with deleted Tag in Grafana
+				grafanaApi.CreateOrUpdateDashboardObjectByID(dashboardJson, folderId, fmt.Sprintf("Deleted '%s' tag", dashboardTag))
+				log.DefaultLogger.Debug("Dashboard preparation successfully")
+
+				// Add Dashboard to in memory file system
+				gitApi.AddFileWithContent(folderName+"/"+dashboardObject.Title+".json", string(dashboardJson))
+				log.DefaultLogger.Debug("Dashboard added to in memory file system")
+			}
+
 			gitApi.CommitWorktree(*repository, dashboardTag)
 			gitApi.PushRepo(*repository)
 			log.DefaultLogger.Info("Dashboards pushed successfully")
 		}
 	}
-
 	// Pull
 	if properties.PullConfiguration.Enable {
 		errorResult := d.PullDashboards(grafanaApi, gitApi, properties.GitUrl, properties.PullConfiguration.GitBranch)
