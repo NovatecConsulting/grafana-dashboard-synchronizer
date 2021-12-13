@@ -59,6 +59,7 @@ export const CommonPushPullSettings: React.FC<PushPullOptionsChange> = ({ ppOpti
           </InlineField>
 
           <InlineField
+            hidden={true}
             label="Filter"
             labelWidth={20}
             tooltip="A filter (regular expression) to narrow down the dashboards considered. This filter represents a whitelisting that takes into account the dashboard name and folder."
