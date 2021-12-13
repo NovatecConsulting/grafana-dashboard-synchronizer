@@ -20,26 +20,9 @@ import (
 // is useful to clean up resources used by previous datasource instance when a new datasource
 // instance created upon datasource settings changed.
 var (
-	_ backend.CheckHealthHandler    = (*SampleDatasource)(nil)
-	_ instancemgmt.InstanceDisposer = (*SampleDatasource)(nil)
+	_ backend.CheckHealthHandler    = (*SynchronizeDatasource)(nil)
+	_ instancemgmt.InstanceDisposer = (*SynchronizeDatasource)(nil)
 )
-
-// NewSampleDatasource creates a new datasource instance.
-func NewSampleDatasource(_ backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
-	// TODO; initial aufgerufen??
-	return &SampleDatasource{}, nil
-}
-
-// SampleDatasource is an example datasource which can respond to data queries, reports
-// its health and has streaming skills.
-type SampleDatasource struct{}
-
-// Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
-// created. As soon as datasource settings change detected by SDK old datasource instance will
-// be disposed and a new one will be created using NewSampleDatasource factory function.
-func (d *SampleDatasource) Dispose() {
-	// Clean up datasource instance resources.
-}
 
 type PullConfiguration struct {
 	Enable       bool   `json:"enable"`
@@ -61,11 +44,30 @@ type SynchronizeOptions struct {
 	PullConfiguration PullConfiguration `json:"pullConfiguration"`
 }
 
+// NewSynchronizeDatasource creates a new datasource instance.
+func NewSynchronizeDatasource(_ backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
+	log.DefaultLogger.Info("Creating data source.")
+	return &SynchronizeDatasource{}, nil
+}
+
+// SynchronizeDatasource is an example datasource which can respond to data queries, reports
+// its health and has streaming skills.
+type SynchronizeDatasource struct {
+}
+
+// Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
+// created. As soon as datasource settings change detected by SDK old datasource instance will
+// be disposed and a new one will be created using NewSampleDatasource factory function.
+func (d *SynchronizeDatasource) Dispose() {
+	log.DefaultLogger.Info("Disposing data source.")
+	// Clean up datasource instance resources.
+}
+
 // CheckHealth handles health checks sent from Grafana to the plugin.
 // The main use case for these health checks is the test button on the
 // datasource configuration page which allows users to verify that
 // a datasource is working as expected.
-func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
+func (d *SynchronizeDatasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	log.DefaultLogger.Debug("Backend called with following request", "request", req)
 
 	var properties SynchronizeOptions
@@ -143,7 +145,7 @@ func (d *SampleDatasource) CheckHealth(_ context.Context, req *backend.CheckHeal
 	}, nil
 }
 
-func (d *SampleDatasource) PullDashboards(grafanaApi GrafanaApi, gitApi GitApi, repositoryUrl string, branch string) *backend.CheckHealthResult {
+func (d *SynchronizeDatasource) PullDashboards(grafanaApi GrafanaApi, gitApi GitApi, repositoryUrl string, branch string) *backend.CheckHealthResult {
 	log.DefaultLogger.Info("Pulling and importing dashboards", "repositoryUrl", repositoryUrl, "branch", branch)
 
 	// clone and fetch repo from specific branch

@@ -16,8 +16,8 @@ func main() {
 	// argument. This factory will be automatically called on incoming request
 	// from Grafana to create different instances of SampleDatasource (per datasource
 	// ID). When datasource configuration changed Dispose method will be called and
-	// new datasource instance created using NewSampleDatasource factory.
-	if err := datasource.Manage("grafana-stage-app", plugin.NewSampleDatasource, datasource.ManageOpts{}); err != nil {
+	// new datasource instance created using NewSynchronizeDatasource factory.
+	if err := datasource.Manage("novatec-dashboardsync-datasource", plugin.NewSynchronizeDatasource, datasource.ManageOpts{}); err != nil {
 		log.DefaultLogger.Error(err.Error())
 		os.Exit(1)
 	}
