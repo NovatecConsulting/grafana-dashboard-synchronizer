@@ -1,4 +1,4 @@
-package plugin
+package internal
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	sdk "github.com/NovatecConsulting/grafana-api-go-sdk"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	log "github.com/sirupsen/logrus"
 )
 
 // GrafanaApi access to grafana api
@@ -23,11 +23,11 @@ type DashboardWithCustomFields struct {
 }
 
 // NewGrafanaApi creates a new GrafanaApi instance
-func NewGrafanaApi(grafanaURL string, apiToken string) GrafanaApi {
+func NewGrafanaApi(grafanaURL string, apiToken string) *GrafanaApi {
 	client, _ := sdk.NewClient(grafanaURL, apiToken, sdk.DefaultHTTPClient)
 	grafanaApi := GrafanaApi{client}
-	log.DefaultLogger.Info("Grafana API Client created")
-	return grafanaApi
+	log.Info("Grafana API Client created")
+	return &grafanaApi
 }
 
 // SearchDashboardsWithTag returns all dashboards with the given tag
@@ -43,7 +43,7 @@ func (grafanaApi GrafanaApi) GetDashboardObjectByUID(uid string) (sdk.Board, sdk
 	if err != nil {
 		dashboardNotFound := strings.Contains(err.Error(), "Dashboard not found")
 		if !dashboardNotFound {
-			log.DefaultLogger.Error("get dashboard object error", "error", err.Error())
+			log.Fatal("get dashboard object error", "error", err.Error())
 		}
 		return sdk.Board{}, sdk.BoardProperties{}
 	}
@@ -61,7 +61,7 @@ func (grafanaApi GrafanaApi) CreateOrUpdateDashboardObjectByID(rawDashboard []by
 		},
 	})
 	if err != nil {
-		log.DefaultLogger.Error("set dashboard error", "error", err.Error())
+		log.Fatal("set dashboard error", "error", err.Error())
 	}
 	return statusMessage
 }
@@ -71,7 +71,7 @@ func (grafanaApi GrafanaApi) CreateFolder(folderName string) int {
 	folder := sdk.Folder{Title: folderName}
 	folder, err := grafanaApi.grafanaClient.CreateFolder(context.Background(), folder)
 	if err != nil && folderName != "General" {
-		log.DefaultLogger.Error("get folders error", "error", err.Error())
+		log.Fatal("get folders error", "error", err.Error())
 	}
 	return folder.ID
 }
@@ -80,7 +80,7 @@ func (grafanaApi GrafanaApi) CreateFolder(folderName string) int {
 func (grafanaApi GrafanaApi) GetOrCreateFolderID(folderName string) int {
 	folders, err := grafanaApi.grafanaClient.GetAllFolders(context.Background())
 	if err != nil {
-		log.DefaultLogger.Error("get all folders error", "error", err.Error())
+		log.Fatal("get all folders error", "error", err.Error())
 	}
 	for _, folder := range folders {
 		if folder.Title == folderName {
@@ -96,7 +96,7 @@ func getDashboardObjectFromRawDashboard(rawDashboard []byte) DashboardWithCustom
 	var dashboardWCF DashboardWithCustomFields
 	err := json.Unmarshal(rawDashboard, &dashboardWCF)
 	if err != nil {
-		log.DefaultLogger.Error("unmarshal raw dashboard error", "error", err.Error())
+		log.Fatal("unmarshal raw dashboard error", "error", err.Error())
 	}
 	return dashboardWCF
 }
@@ -124,9 +124,9 @@ func (grafanaApi GrafanaApi) CreateOrUpdateDashboard(fileMap map[string]map[stri
 			if !reflect.DeepEqual(grafanaDashboardExtended, gitDashboardExtended) {
 				versionMessage := fmt.Sprintf("[SYNC] Synchronized dashboard. Version '%s' from origin '%s' (commit %s).", strconv.Itoa(int(gitDashboardExtended.Version)), syncOrigin, currentCommitId)
 				grafanaApi.CreateOrUpdateDashboardObjectByID(gitRawDashboard, folderID, versionMessage)
-				log.DefaultLogger.Debug("Dashboard created", "name", gitDashboardName)
+				log.Debug("Dashboard created", "name", gitDashboardName)
 			} else {
-				log.DefaultLogger.Debug("Dashboard already up-to-date", "name", gitDashboardName)
+				log.Debug("Dashboard already up-to-date", "name", gitDashboardName)
 			}
 		}
 	}

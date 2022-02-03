@@ -1,4 +1,4 @@
-package plugin
+package internal
 
 import (
 	"io/ioutil"
@@ -8,7 +8,7 @@ import (
 	"gopkg.in/src-d/go-git.v4/plumbing"
 
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	log "github.com/sirupsen/logrus"
 	ssh2 "golang.org/x/crypto/ssh"
 	"gopkg.in/src-d/go-billy.v4"
 	"gopkg.in/src-d/go-billy.v4/memfs"
@@ -27,10 +27,10 @@ type GitApi struct {
 }
 
 // NewGitApi creates a new NewGitApi instance
-func NewGitApi(gitUrl string, privateKey []byte) GitApi {
-	authenticator, err := createAuthenticator(privateKey)
+func NewGitApi(gitUrl string, privateKeyFile string) GitApi {
+	authenticator, err := createAuthenticator(privateKeyFile)
 	if err != nil {
-		log.DefaultLogger.Error("authentication failed", "error", err.Error())
+		log.Fatal("authentication failed", "error", err.Error())
 	}
 	inMemoryStore, inMemoryFileSystem := createInMemory()
 	gitApi := GitApi{gitUrl, authenticator, *inMemoryStore, inMemoryFileSystem}
@@ -39,11 +39,11 @@ func NewGitApi(gitUrl string, privateKey []byte) GitApi {
 }
 
 // helper function to create the git authenticator
-func createAuthenticator(privateKey []byte) (*ssh.PublicKeys, error) {
+func createAuthenticator(privateKeyFile string) (*ssh.PublicKeys, error) {
 	// git authentication with ssh
-	authenticator, err := ssh.NewPublicKeys("git", privateKey, "")
+	authenticator, err := ssh.NewPublicKeysFromFile("git", privateKeyFile, "")
 	if err != nil {
-		log.DefaultLogger.Error("generate public keys failed", "error", err.Error())
+		log.Fatal("generate public keys failed", "error", err.Error())
 		return nil, err
 	}
 
@@ -72,10 +72,10 @@ func (gitApi GitApi) CloneRepo(branchName string) (*git.Repository, error) {
 	})
 
 	if err != nil {
-		log.DefaultLogger.Error("clone error", "error", err)
+		log.Fatal("clone error", "error", err)
 		return nil, err
 	} else {
-		log.DefaultLogger.Info("repo cloned")
+		log.Info("repo cloned")
 	}
 
 	return r, err
@@ -84,7 +84,7 @@ func (gitApi GitApi) CloneRepo(branchName string) (*git.Repository, error) {
 // FetchRepo fetches the given repository
 func (gitApi GitApi) FetchRepo(repository git.Repository) (error, string) {
 
-	log.DefaultLogger.Info("fetching repo")
+	log.Info("fetching repo")
 	err := repository.Fetch(&git.FetchOptions{
 		RemoteName: "origin",
 		Auth:       gitApi.authenticator,
@@ -104,7 +104,7 @@ func (gitApi GitApi) AddFileWithContent(fileName string, fileContent string) {
 	// add file with content to in memory filesystem
 	tempFile, err := gitApi.inMemoryFileSystem.Create(fileName)
 	if err != nil {
-		log.DefaultLogger.Error("create file error", "error", err)
+		log.Fatal("create file error", "error", err)
 		return
 	} else {
 		tempFile.Write([]byte(fileContent))
@@ -117,12 +117,12 @@ func (gitApi GitApi) CommitWorktree(repository git.Repository, tag string) {
 	// get worktree and commit
 	w, err := repository.Worktree()
 	if err != nil {
-		log.DefaultLogger.Error("worktree error", "error", err)
+		log.Fatal("worktree error", "error", err)
 		return
 	} else {
 		w.Add("./")
 		wStatus, _ := w.Status()
-		log.DefaultLogger.Debug("worktree status", "status", wStatus)
+		log.Debug("worktree status", "status", wStatus)
 
 		_, err := w.Commit("Synchronized Dashboards with tag <"+tag+">", &git.CommitOptions{
 			Author: (*object2.Signature)(&object.Signature{
@@ -131,7 +131,7 @@ func (gitApi GitApi) CommitWorktree(repository git.Repository, tag string) {
 			}),
 		})
 		if err != nil {
-			log.DefaultLogger.Error("worktree commit error", "error", err.Error())
+			log.Fatal("worktree commit error", "error", err.Error())
 			return
 		}
 	}
@@ -145,7 +145,7 @@ func (gitApi GitApi) PushRepo(repository git.Repository) {
 		Auth:       gitApi.authenticator,
 	})
 	if err != nil {
-		log.DefaultLogger.Error("push error", "error", err.Error())
+		log.Fatal("push error", "error", err.Error())
 	}
 }
 
@@ -154,18 +154,18 @@ func (gitApi GitApi) PullRepo(repository git.Repository) string {
 	// pull repo
 	w, err := repository.Worktree()
 	if err != nil {
-		log.DefaultLogger.Error("worktree error", "error", err)
+		log.Fatal("worktree error", "error", err)
 	} else {
-		log.DefaultLogger.Debug("Pulling from Repo")
+		log.Debug("Pulling from Repo")
 		err := w.Pull(&git.PullOptions{
 			RemoteName: "origin",
 			Auth:       gitApi.authenticator,
 		})
 		if err != nil {
 			if strings.Contains(err.Error(), "already up-to-date") {
-				log.DefaultLogger.Info("pulling completed", "message", err.Error())
+				log.Info("pulling completed", "message", err.Error())
 			} else {
-				log.DefaultLogger.Error("pull error", "error", err.Error())
+				log.Fatal("pull error", "error", err.Error())
 			}
 		}
 	}
@@ -198,7 +198,7 @@ func (gitApi GitApi) GetFileContent() map[string]map[string][]byte {
 	// read current in memory filesystem to get dirs
 	filesOrDirs, err := gitApi.inMemoryFileSystem.ReadDir("./")
 	if err != nil {
-		log.DefaultLogger.Error("inMemoryFileSystem error", "error", err)
+		log.Fatal("inMemoryFileSystem error", "error", err)
 		return nil
 	}
 
@@ -220,13 +220,13 @@ func (gitApi GitApi) GetFileContent() map[string]map[string][]byte {
 		// read current in memory filesystem to get files
 		files, err := gitApi.inMemoryFileSystem.ReadDir("./" + dir + "/")
 		if err != nil {
-			log.DefaultLogger.Error("inMemoryFileSystem ReadDir error", "error", err)
+			log.Fatal("inMemoryFileSystem ReadDir error", "error", err)
 			return nil
 		}
 
 		for _, file := range files {
 
-			log.DefaultLogger.Debug("file", "name", file.Name())
+			log.Debug("file", "name", file.Name())
 
 			if file.IsDir() {
 				continue
@@ -235,12 +235,12 @@ func (gitApi GitApi) GetFileContent() map[string]map[string][]byte {
 			src, err := gitApi.inMemoryFileSystem.Open("./" + dir + "/" + file.Name())
 
 			if err != nil {
-				log.DefaultLogger.Error("inMemoryFileSystem Open error", "error", err)
+				log.Fatal("inMemoryFileSystem Open error", "error", err)
 				return nil
 			}
 			byteFile, err := ioutil.ReadAll(src)
 			if err != nil {
-				log.DefaultLogger.Error("read error", "error", err)
+				log.Fatal("read error", "error", err)
 			} else {
 				fileMap[dir][file.Name()] = byteFile
 				src.Close()
