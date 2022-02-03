@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
+
 	"github.com/NovatecConsulting/grafana-dashboard-sync/pkg/internal"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -11,50 +15,30 @@ func main() {
 
 	log.Info("Synchronizing Grafana dashboards...")
 
-	pushConfiguration := internal.PushConfiguration{
-		PushTags:   true,
-		TagPattern: "agent",
-		PullConfiguration: internal.PullConfiguration{
-			Enable:    false,
-			GitBranch: "standalone",
-			Filter:    "",
-		},
+	input, err := readConf("../test.yml")
+	if err != nil {
+		log.Fatal(err)
+		return
 	}
 
-	pullConfiguration := internal.PullConfiguration{
-		Enable:    true,
-		GitBranch: "standalone",
-		Filter:    "",
+	for _, element := range *input {
+		synchronizer := internal.NewSynchronizer(element)
+
+		synchronizer.Synchronize()
+	}
+}
+
+func readConf(filename string) (*[]internal.SynchronizeOptions, error) {
+	buf, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
 	}
 
-	options := internal.SynchronizeOptions{
-		JobName:      "test-job",
-		GrafanaToken: "eyJrIjoiSEp4dzhGdVBxMUhBdm5Dbkxhdnd0b2Rzbm1wS3laTjMiLCJuIjoidGVzdCIsImlkIjoxfQ==",
-		GrafanaUrl:   "http://localhost:3000",
-
-		GitRepositoryUrl: "git@github.com:mariusoe/config-push.git",
-		PrivateKeyFile:   "/Users/mo/.ssh/id_ed25519",
-
-		PushConfiguration: pushConfiguration,
-		PullConfiguration: pullConfiguration,
+	c := &[]internal.SynchronizeOptions{}
+	err = yaml.Unmarshal(buf, c)
+	if err != nil {
+		return nil, fmt.Errorf("in file %q: %v", filename, err)
 	}
 
-	synchronizer := internal.NewSynchronizer(options)
-
-	synchronizer.Synchronize()
-
-	// log.DefaultLogger.Debug("Synchronizing Grafana dashboards..")
-	// Start listening to requests sent from Grafana. This call is blocking so
-	// it won't finish until Grafana shuts down the process or the plugin choose
-	// to exit by itself using os.Exit. Manage automatically manages life cycle
-	// of datasource instances. It accepts datasource instance factory as first
-	// argument. This factory will be automatically called on incoming request
-	// from Grafana to create different instances of SampleDatasource (per datasource
-	// ID). When datasource configuration changed Dispose method will be called and
-	// new datasource instance created using NewSynchronizeDatasource factory.
-
-	//if err := datasource.Manage("novatec-dashboardsync-datasource", plugin.NewSynchronizeDatasource, datasource.ManageOpts{}); err != nil {
-	//	log.DefaultLogger.Error(err.Error())
-	//	os.Exit(1)
-	//}
+	return c, nil
 }

@@ -12,28 +12,27 @@ func Test() {
 }
 
 type SynchronizeOptions struct {
-	JobName      string
-	GrafanaToken string
-	GrafanaUrl   string
+	JobName      string `yaml:"job-name"`
+	GrafanaToken string `yaml:"grafana-token"`
+	GrafanaUrl   string `yaml:"grafana-url"`
 
-	GitRepositoryUrl string
-	PrivateKeyFile   string
+	GitRepositoryUrl string `yaml:"git-repository-url"`
+	PrivateKeyFile   string `yaml:"private-key-file"`
 
-	PushConfiguration PushConfiguration
-	PullConfiguration PullConfiguration
+	PushConfiguration PushConfiguration `yaml:"push-configuration"`
+	PullConfiguration PullConfiguration `yaml:"pull-configuration"`
 }
 
 type PullConfiguration struct {
-	Enable       bool   `json:"enable"`
-	GitBranch    string `json:"gitBranch"`
-	SyncInterval int64  `json:"syncInterval"`
-	Filter       string `json:"filter"`
+	Enable    bool   `yaml:"enable"`
+	GitBranch string `yaml:"git-branch"`
+	Filter    string `yaml:"filter"`
 }
 
 type PushConfiguration struct {
-	PullConfiguration
-	TagPattern string `json:"tagPattern"`
-	PushTags   bool   `json:"pushTags"`
+	PullConfiguration `yaml:",inline"`
+	TagPattern        string `yaml:"tag-pattern"`
+	PushTags          bool   `yaml:"push-tags"`
 }
 
 func NewSynchronizer(options SynchronizeOptions) *Synchronization {
@@ -126,11 +125,6 @@ func (s *Synchronization) Synchronize() error {
 			return errorResult
 		}
 	}
-
-	// return &backend.CheckHealthResult{
-	// 	Status:  backend.HealthStatusOk,
-	// 	Message: "Dashboards have been synchronized",
-	// }, nil
 
 	return nil
 }
