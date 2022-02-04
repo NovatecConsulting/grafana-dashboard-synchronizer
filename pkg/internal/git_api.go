@@ -1,8 +1,8 @@
 package internal
 
 import (
+	"fmt"
 	"io/ioutil"
-	"strings"
 	"time"
 
 	"gopkg.in/src-d/go-git.v4/plumbing"
@@ -24,18 +24,19 @@ type GitApi struct {
 	authenticator      *ssh.PublicKeys
 	inMemoryStore      memory.Storage
 	inMemoryFileSystem billy.Filesystem
+	repository         *git.Repository
 }
 
 // NewGitApi creates a new NewGitApi instance
-func NewGitApi(gitUrl string, privateKeyFile string) GitApi {
+func NewGitApi(gitUrl string, privateKeyFile string) *GitApi {
 	authenticator, err := createAuthenticator(privateKeyFile)
 	if err != nil {
 		log.Fatal("authentication failed", "error", err.Error())
 	}
 	inMemoryStore, inMemoryFileSystem := createInMemory()
-	gitApi := GitApi{gitUrl, authenticator, *inMemoryStore, inMemoryFileSystem}
+	gitApi := GitApi{gitUrl, authenticator, *inMemoryStore, inMemoryFileSystem, nil}
 
-	return gitApi
+	return &gitApi
 }
 
 // helper function to create the git authenticator
@@ -64,38 +65,49 @@ func createInMemory() (*memory.Storage, billy.Filesystem) {
 }
 
 // CloneRepo clones the gitApi.gitUrls repository
-func (gitApi GitApi) CloneRepo(branchName string) (*git.Repository, error) {
-	r, err := git.Clone(&gitApi.inMemoryStore, gitApi.inMemoryFileSystem, &git.CloneOptions{
-		URL:           gitApi.gitUrl,
-		Auth:          gitApi.authenticator,
-		ReferenceName: plumbing.NewBranchReferenceName(branchName),
-	})
+func (gitApi *GitApi) CloneRepo(branchName string) (*git.Repository, error) {
+	//todo: refactor this function
 
-	if err != nil {
-		log.Fatal("clone error", "error", err)
-		return nil, err
+	if gitApi.repository != nil {
+		// only checkout branch if repository has already be cloned
+		log.WithFields(log.Fields{
+			"repository-url": gitApi.gitUrl,
+			"branch":         branchName,
+		}).Debug("Checkout branch because repository already exists..")
+
+		repo := gitApi.repository
+
+		worktree, _ := repo.Worktree()
+
+		err := worktree.Checkout(&git.CheckoutOptions{
+			Branch: plumbing.ReferenceName(fmt.Sprintf("refs/remotes/origin/%s", branchName)),
+			Force:  true,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return gitApi.repository, nil
 	} else {
-		log.Info("repo cloned")
-	}
+		// clone repository into memory
+		log.WithFields(log.Fields{
+			"repository-url": gitApi.gitUrl,
+			"branch":         branchName,
+		}).Info("Cloning repository..")
 
-	return r, err
-}
+		r, err := git.Clone(&gitApi.inMemoryStore, gitApi.inMemoryFileSystem, &git.CloneOptions{
+			URL:           gitApi.gitUrl,
+			Auth:          gitApi.authenticator,
+			ReferenceName: plumbing.NewBranchReferenceName(branchName),
+			SingleBranch:  false,
+		})
 
-// FetchRepo fetches the given repository
-func (gitApi GitApi) FetchRepo(repository git.Repository) (error, string) {
+		if err != nil {
+			return nil, err
+		}
 
-	log.Info("fetching repo")
-	err := repository.Fetch(&git.FetchOptions{
-		RemoteName: "origin",
-		Auth:       gitApi.authenticator,
-	})
-
-	if err == nil {
-		return nil, ""
-	} else if strings.Contains(err.Error(), "already up-to-date") {
-		return err, "up-to-date"
-	} else {
-		return err, err.Error()
+		gitApi.repository = r
+		return r, nil
 	}
 }
 
@@ -147,34 +159,6 @@ func (gitApi GitApi) PushRepo(repository git.Repository) {
 	if err != nil {
 		log.Fatal("push error", "error", err.Error())
 	}
-}
-
-// PullRepo pull the given repository and returns the latest commit ID
-func (gitApi GitApi) PullRepo(repository git.Repository) string {
-	// pull repo
-	w, err := repository.Worktree()
-	if err != nil {
-		log.Fatal("worktree error", "error", err)
-	} else {
-		log.Debug("Pulling from Repo")
-		err := w.Pull(&git.PullOptions{
-			RemoteName: "origin",
-			Auth:       gitApi.authenticator,
-		})
-		if err != nil {
-			if strings.Contains(err.Error(), "already up-to-date") {
-				log.Info("pulling completed", "message", err.Error())
-			} else {
-				log.Fatal("pull error", "error", err.Error())
-			}
-		}
-	}
-	// retrieves the branch pointed by HEAD
-	ref, err := repository.Head()
-
-	// get the commit object, pointed by ref
-	commit, err := repository.CommitObject(ref.Hash())
-	return commit.ID().String()
 }
 
 func (gitApi GitApi) GetLatestCommitId(repository git.Repository) (string, error, string) {

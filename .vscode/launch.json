@@ -9,7 +9,10 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "pkg"
+            "program": "pkg",
+            "args": [
+                "-c", "../configuration.yml"//, "--dry-run"
+            ]
         }
     ]
 }
