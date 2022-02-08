@@ -62,28 +62,34 @@ func (grafanaApi GrafanaApi) CreateOrUpdateDashboardObjectByID(rawDashboard []by
 }
 
 // CreateFolder create a folder in Grafana
-func (grafanaApi GrafanaApi) CreateFolder(folderName string) int {
+func (grafanaApi GrafanaApi) CreateFolder(folderName string) (*sdk.Folder, error) {
 	folder := sdk.Folder{Title: folderName}
 	folder, err := grafanaApi.grafanaClient.CreateFolder(context.Background(), folder)
-	if err != nil && folderName != "General" {
-		log.Fatal("get folders error", "error", err.Error())
+	if err != nil {
+		return &folder, err
 	}
-	return folder.ID
+	return &folder, nil
 }
 
-// GetOrCreateFolderID returns the ID of a given folder or create it
-func (grafanaApi GrafanaApi) GetOrCreateFolderID(folderName string) int {
+// Returns the ID of a given folder.
+func (grafanaApi GrafanaApi) GetFolder(folderName string) (*sdk.Folder, error) {
+	if folderName == "General" {
+		// see the folling site for more details on this: https://grafana.com/docs/grafana/latest/http_api/folder/#a-note-about-the-general-folder
+		return &sdk.Folder{
+			ID: 0,
+		}, nil
+	}
+
 	folders, err := grafanaApi.grafanaClient.GetAllFolders(context.Background())
 	if err != nil {
-		log.Fatal("get all folders error", "error", err.Error())
+		return nil, err
 	}
 	for _, folder := range folders {
 		if folder.Title == folderName {
-			return folder.ID
+			return &folder, nil
 		}
 	}
-	generatedFolderID := grafanaApi.CreateFolder(folderName)
-	return generatedFolderID
+	return nil, nil
 }
 
 // DeleteTagFromDashboardObjectByID delete the given tag from the Dashboard object

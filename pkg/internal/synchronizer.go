@@ -175,9 +175,28 @@ func (s *Synchronization) pullDashboards(dryRun bool) error {
 	fileMap := s.gitApi.GetFileContent()
 
 	// for each folder
-	for folder, dashboardFiles := range fileMap {
-		// get Grafana folder ID or create if not exists
-		folderId := s.grafanaApi.GetOrCreateFolderID(folder)
+	for folderName, dashboardFiles := range fileMap {
+		// get Grafana folder or create it if it doesn't exist
+		folder, err := s.grafanaApi.GetFolder(folderName)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"folder": folderName,
+				"error":  err,
+			}).Fatal("Could not fetch Grafana folder.")
+			continue
+		} else if folder == nil {
+			log.WithField("folder", folderName).Info("Creating Grafana folder.")
+			if !dryRun {
+				folder, err = s.grafanaApi.CreateFolder(folderName)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"folder": folderName,
+						"error":  err,
+					}).Fatal("Could not create Grafana folder.")
+					continue
+				}
+			}
+		}
 
 		// for each dashboard within folder
 		for _, dashboardJson := range dashboardFiles {
@@ -205,11 +224,17 @@ func (s *Synchronization) pullDashboards(dryRun bool) error {
 			// 'SyncOrigin' need to be set, because custom fields are lost through the import
 			grafanaDashboardExtended := DashboardWithCustomFields{grafanaDashboard, dashboard.SyncOrigin}
 
+			// import dashboard if it differs from the current one
 			if !reflect.DeepEqual(grafanaDashboardExtended, dashboard) {
 				versionMessage := fmt.Sprintf("[SYNC] Synchronized dashboard. Version '%s' from origin '%s' (commit %s).", strconv.Itoa(int(grafanaDashboardExtended.Version)), syncOrigin, commitId)
 
-				log.WithField("dashboard", dashboard.Title).Info("Importing dashboard into Grafana.")
-				s.grafanaApi.CreateOrUpdateDashboardObjectByID(dashboardJson, folderId, versionMessage)
+				log.WithFields(log.Fields{
+					"dashboard": dashboard.Title,
+					"folder":    folderName,
+				}).Info("Importing dashboard into Grafana.")
+				if !dryRun {
+					s.grafanaApi.CreateOrUpdateDashboardObjectByID(dashboardJson, folder.ID, versionMessage)
+				}
 
 				countImport++
 			} else {
