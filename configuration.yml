@@ -1,0 +1,17 @@
+# example configuration
+- job-name:      "example-job"
+  grafana-token: "<GRAFANA_TOKEN>"
+  grafana-url:   "http://localhost:3000"
+  git-repository-url: "<GIT_RESPOSITORY_URL>"
+  private-key-file:   "<PRIVATE_KEY_FILE>"
+
+  push-configuration:
+    enable: true
+    git-branch: "push-branch"
+    filter: ""
+    tag-pattern: "ready-for-sync"
+    push-tags: true
+  pull-configuration:
+    enable: true
+    git-branch: "pull-branch"
+    filter: ""
