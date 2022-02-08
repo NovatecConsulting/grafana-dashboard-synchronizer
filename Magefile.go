@@ -18,7 +18,7 @@ import (
 // var Default = Build
 
 func getExecutableName(os string, arch string) string {
-	exeName := fmt.Sprintf("%s_%s_%s", "grafana-dashboard-sync", os, arch)
+	exeName := fmt.Sprintf("%s_%s_%s", "grafana-dashboard-synchronizer", os, arch)
 	if os == "windows" {
 		exeName = fmt.Sprintf("%s.exe", exeName)
 	}

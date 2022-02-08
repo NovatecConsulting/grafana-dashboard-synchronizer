@@ -1,52 +1,87 @@
-# Grafana Dashboard Synchronization Backend Plugin
+# Grafana Dashboard Synchronizer
 
-A Grafana backend plugin for automatic synchronization of dashboard between multiple Grafana instances.
+A small CLI tool to do a tag-base automatic synchornization and backup Grafana of dashboards across multiple Grafana instances.
 
-This plugin can be used to synchronize dashboards via a Git repository.  
-A possible use case is: One Grafana instance is using the plugin to push dashboards to a Git repository,
-another Grafana instance is using it to pull the dashboards.  
+This application can be used to synchronize dashboards, using a Git repository, across multiple Grafana instances.  
+A possible use case is: push Grafana dashboards from one Grafana instance to a Git repository and import them into another Grafana instance. In addition, users can use tags to determine for themselves when a dashboard should be synchronized.
+
 As an example this is useful to stage dashboards from "dev" to "prod" environments.
 
-## Getting started
+## Usage
 
-A data source backend plugin consists of both frontend and backend components.
+The application can be used as follows:
 
-### Frontend
+    $ ./grafana-dashboard-synchronizer [options]
 
-1. Install dependencies
+By default, the application will use a configuration file named `configuration.yml` next to the binary. A custom configuration file can be used using the `--config` or `-c` option flag:
+
+    $ ./grafana-dashboard-synchronizer --config /custom/configuration.yml
+
+In addition, a dry-run flag can be used. When the `--dry-run` flag is used, the application does not perform any modifications. This can be useful when testing what changes would be made.
+
+    $ ./grafana-dashboard-synchronizer --dry-run
+
+By default, the application logs in an easy-to-read text format. With the `--log-as-json` flag, the application generates logs in JSON format, which is convenient if the logs are processed by other tools such as Logstash:
+
+    $ ./grafana-dashboard-synchronizer
+      INFO[0000] Synchronizing Grafana dashboards...
+      ...
+
+compared to:
+
+    $ ./grafana-dashboard-synchronizer --log-as-json
+      {"level":"info","msg":"Synchronizing Grafana dashboards...","time":"2022-02-08T16:41:26+01:00"}
+      ...
+
+### Configuration
+
+The configuration file can contain multiple jobs, which will be sequentially executed. Furthermore, the push (export) step of a job is executed before its pull (import) step.
+
+See the following configuration for available configuration options:
+
+    - job-name:      "example-job"
+      # API token to interact with the specified Grafana instance
+      grafana-token: "eyJrIjoiSEp4dzhGdVBxMUhBdm..."
+      # Base URL of the Grafana instance
+      grafana-url:   "http://localhost:3000"
+      # SSH-URL of the Git repository to use
+      git-repository-url: "<GIT_REPOSITORY_URL>"
+      # Private key to use for authentication against the Git repository
+      private-key-file:   "<PRIVATE_SSH_KEY>"
+
+      # push (export) related configurations
+      push-configuration:
+         # whether to export dashboards
+         enable: true
+         # the branch to use for exporting dashboards
+         git-branch: "push-branch"
+         # only dashboards with match this pattern will be considered in the sync process
+         filter: ""
+         # the tag to determine which dashboards should be exported
+         tag-pattern: "agent"
+         # whether the sync-tag should be kept during exporting
+         push-tags: true
+
+      # pull (import) related configurations  
+      pull-configuration:
+         # whether to import dashboards
+         enable: true
+         # the branch to use for importing dashboards
+         git-branch: "pull-branch"
+         # only dashboards with match this pattern will be considered in the sync process
+         filter: ""
+
+## Development
+
+### Getting started
+
+1. Update and get dependencies:
 
    ```bash
-   yarn install
-   ```
-
-2. Build plugin in development mode or run in watch mode
-
-   ```bash
-   yarn dev
-   ```
-
-   or
-
-   ```bash
-   yarn watch
-   ```
-
-3. Build plugin in production mode
-
-   ```bash
-   yarn build
-   ```
-
-### Backend
-
-1. Update [Grafana plugin SDK for Go](https://grafana.com/docs/grafana/latest/developers/plugins/backend/grafana-plugin-sdk-for-go/) dependency to the latest minor version:
-
-   ```bash
-   go get -u github.com/grafana/grafana-plugin-sdk-go
    go mod tidy
    ```
 
-2. Build backend plugin binaries for Linux, Windows and Darwin:
+2. Build binaries for Linux, Windows and Darwin:
 
    ```bash
    mage -v
@@ -58,36 +93,12 @@ A data source backend plugin consists of both frontend and backend components.
    mage -l
    ```
 
-### Local Development
+### Releasing the Application
 
-Set environment variables
-```
-PLUGIN_REPO = local path to cloned repo
-GIT_SSH_KEY = path to private git sshkey
-```
-
-Build frontend and backend and start docker-compose
-
-```
-docker-compose up 
-```
-
-Under datasources the Grafana Dashboard Plugin Sync should be available now
-
-## Releasing the Plugin
-
-The release process of the plugin is automated using Github Actions.
+The release process of the application is automated using Github Actions.
 On each push to the `main` branch, a new prerelease is created and the corresponding commit is tagged "latest".
 Old prereleases will be deleted.
 
 To create a normal release, the commit that is used as the basis for the release must be tagged with the following format: `v*.*.*`.
 After that, the release is built and created with the version number extracted from the tag.
 Furthermore, a new commit is created, which sets the current version in the `main` branch to the version that has been released.
-
-## Learn more
-
-- [Build a data source backend plugin tutorial](https://grafana.com/tutorials/build-a-data-source-backend-plugin)
-- [Grafana documentation](https://grafana.com/docs/)
-- [Grafana Tutorials](https://grafana.com/tutorials/) - Grafana Tutorials are step-by-step guides that help you make the most of Grafana
-- [Grafana UI Library](https://developers.grafana.com/ui) - UI components to help you build interfaces using Grafana Design System
-- [Grafana plugin SDK for Go](https://grafana.com/docs/grafana/latest/developers/plugins/backend/grafana-plugin-sdk-for-go/)
