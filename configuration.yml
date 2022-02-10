@@ -2,21 +2,27 @@
 # example configuration
 ##########################
 
+- job-name:      "example-job"
   # API token to interact with the specified Grafana instance
+  grafana-token: "eyJrIjoiSEp4dzhGdVBxMUhBdm5Db..."
   # Base URL of the Grafana instance
   grafana-url:   "http://localhost:3000"
   # SSH-URL of the Git repository to use
-  private-key-file:   "<PRIVATE_KEY_FILE>"
+  git-repository-url: "<GIT_REPOSITORY_URL>"
   # Private key to use for authentication against the Git repository
+  private-key-file:   "<PRIVATE_SSH_KEY>"
 
   # push (export) related configurations
   push-configuration:
     # whether to export dashboards
     enable: true
     # the branch to use for exporting dashboards
-    # only dashboards with match this pattern will be considered in the sync process
+    git-branch: "push-branch"
+    # only dashboards with match this pattern will be considered in the sync process.
+    # this value is a WHITELIST in case it is not empty!
     filter: ""
     # the tag to determine which dashboards should be exported
+    tag-pattern: "sync"
     # whether the sync-tag should be kept during exporting
     push-tags: true
 
@@ -25,5 +31,7 @@
     # whether to import dashboards
     enable: true
     # the branch to use for importing dashboards
-    # only dashboards with match this pattern will be considered in the sync process
+    git-branch: "pull-branch"
+    # only dashboards with match this pattern will be considered in the sync process.
+    # this value is a WHITELIST in case it is not empty!
     filter: ""
