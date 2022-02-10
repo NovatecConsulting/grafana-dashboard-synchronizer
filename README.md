@@ -7,6 +7,10 @@ A possible use case is: push Grafana dashboards from one Grafana instance to a G
 
 As an example this is useful to stage dashboards from "dev" to "prod" environments.
 
+The special thing is that the synchronization of dashboards is based on tags, which can be created by the users themselves. Thus, users can determine when a dashboard is ready for synchronization, e.g. so that it is synchronized from a "dev" to a "prod" environment.
+
+If a dashboard is imported to Grafana but a dashboard with the same name or ID already exists there, it will be overwritten. For security reasons, dashboards **are not deleted** by the application. If a dashboard is obsolete, it must be deleted manually by the user.
+
 ## Usage
 
 The application can be used as follows:
@@ -55,10 +59,11 @@ See the following configuration for available configuration options:
          enable: true
          # the branch to use for exporting dashboards
          git-branch: "push-branch"
-         # only dashboards with match this pattern will be considered in the sync process
+         # only dashboards with match this pattern will be considered in the sync process.
+         # this value is a WHITELIST in case it is not empty!!!
          filter: ""
          # the tag to determine which dashboards should be exported
-         tag-pattern: "agent"
+         tag-pattern: "sync"
          # whether the sync-tag should be kept during exporting
          push-tags: true
 
@@ -68,7 +73,8 @@ See the following configuration for available configuration options:
          enable: true
          # the branch to use for importing dashboards
          git-branch: "pull-branch"
-         # only dashboards with match this pattern will be considered in the sync process
+         # only dashboards with match this pattern will be considered in the sync process.
+         # this value is a WHITELIST in case it is not empty!!!
          filter: ""
 
 ## Development

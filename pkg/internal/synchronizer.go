@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strconv"
 
+	sdk "github.com/NovatecConsulting/grafana-api-go-sdk"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -81,14 +83,32 @@ func (s *Synchronization) Synchronize(dryRun bool) error {
 
 // Pushs dashboards from the configured Grafana into Git.
 func (s *Synchronization) pushDashboards(dryRun bool) error {
+	configuration := s.options.PushConfiguration
+
 	log.WithFields(log.Fields{
-		"target-branch": s.options.PushConfiguration.GitBranch,
-		"filter":        s.options.PushConfiguration.Filter,
-		"tag-pattern":   s.options.PushConfiguration.TagPattern,
-		"push-tags":     s.options.PushConfiguration.PushTags,
+		"job":           s.options.JobName,
+		"target-branch": configuration.GitBranch,
+		"filter":        configuration.Filter,
+		"tag-pattern":   configuration.TagPattern,
+		"push-tags":     configuration.PushTags,
 	}).Info("Starting dashboard synchroization (export) into the Git repository.")
 
-	dashboardTag := s.options.PushConfiguration.TagPattern
+	// initializing the dashboard filter
+	var regexFilter *regexp.Regexp
+	var err error
+	if configuration.Filter != "" {
+		regexFilter, err = regexp.Compile(configuration.Filter)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"error":  err,
+				"job":    s.options.JobName,
+				"filter": configuration.Filter,
+			}).Fatal("Invalid filter pattern for the push configuration. Skipping exportation of dashboard.")
+			return err
+		}
+	}
+
+	dashboardTag := configuration.TagPattern
 
 	resultBoards, err := s.grafanaApi.SearchDashboardsWithTag(dashboardTag)
 
@@ -100,7 +120,7 @@ func (s *Synchronization) pushDashboards(dryRun bool) error {
 		log.WithField("amount", len(resultBoards)).Info("Successfully fetched dashboards.")
 
 		// clone repo from specific branch
-		repository, err := s.gitApi.CloneRepo(s.options.PushConfiguration.GitBranch)
+		repository, err := s.gitApi.CloneRepo(configuration.GitBranch)
 		if err != nil {
 			log.WithField("error", err).Fatal("Error while cloning repository.")
 			return err
@@ -110,8 +130,25 @@ func (s *Synchronization) pushDashboards(dryRun bool) error {
 			// get dashboard Object and Properties
 			dashboard, boardProperties := s.grafanaApi.GetDashboardObjectByUID(board.UID)
 
+			// synchronize only dashboards matching the filter
+			if regexFilter != nil {
+				folderAndTitle := boardProperties.FolderTitle + "/" + dashboard.Title
+				if regexFilter.FindStringIndex(folderAndTitle) == nil {
+					log.WithFields(log.Fields{
+						"dashboard-path": folderAndTitle,
+						"filter":         configuration.Filter,
+					}).Info("Skipping export because dashboard does not match the specified filter pattern.")
+					continue
+				}
+			}
+
 			// delete Tag from dashboard Object
-			dashboardWithDeletedTag := s.grafanaApi.DeleteTagFromDashboardObjectByID(dashboard, dashboardTag)
+			var dashboardWithDeletedTag sdk.Board
+			if configuration.PushTags {
+				dashboardWithDeletedTag = dashboard
+			} else {
+				dashboardWithDeletedTag = s.grafanaApi.DeleteTagFromDashboardObjectByID(dashboard, dashboardTag)
+			}
 
 			// get folder name and id, required for update processes and git folder structure
 			folderId := boardProperties.FolderID
@@ -142,7 +179,7 @@ func (s *Synchronization) pushDashboards(dryRun bool) error {
 
 		log.Info("Successfully pushed dashboards to the remote Git repository.")
 	} else {
-		log.WithField("tag-pattern", s.options.PushConfiguration.TagPattern).Info("No dashboards found using the configured tag pattern.")
+		log.WithField("tag-pattern", configuration.TagPattern).Info("No dashboards found using the configured tag pattern.")
 	}
 
 	return nil
@@ -150,13 +187,31 @@ func (s *Synchronization) pushDashboards(dryRun bool) error {
 
 // Pulling dashboards from the configured Git and importing them into Grafana.
 func (s *Synchronization) pullDashboards(dryRun bool) error {
+	configuration := s.options.PullConfiguration
+
 	log.WithFields(log.Fields{
-		"target-branch": s.options.PullConfiguration.GitBranch,
-		"filter":        s.options.PullConfiguration.Filter,
+		"job":           s.options.JobName,
+		"target-branch": configuration.GitBranch,
+		"filter":        configuration.Filter,
 	}).Info("Starting dashboard synchroization (import) from the Git repository.")
 
+	// initializing the dashboard filter
+	var regexFilter *regexp.Regexp
+	var err error
+	if configuration.Filter != "" {
+		regexFilter, err = regexp.Compile(configuration.Filter)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"error":  err,
+				"job":    s.options.JobName,
+				"filter": configuration.Filter,
+			}).Fatal("Invalid filter pattern for the pull configuration. Skipping importation of dashboard.")
+			return err
+		}
+	}
+
 	// clone and fetch the configured repository
-	repository, err := s.gitApi.CloneRepo(s.options.PullConfiguration.GitBranch)
+	repository, err := s.gitApi.CloneRepo(configuration.GitBranch)
 	if err != nil {
 		log.WithField("error", err).Fatal("Error while cloning repository.")
 		return err
@@ -208,6 +263,18 @@ func (s *Synchronization) pullDashboards(dryRun bool) error {
 					"dashboard": dashboard.Title,
 					"error":     err,
 				}).Fatal("Failed to unmarshal dashboard.")
+			}
+
+			// synchronize only dashboards matching the filter
+			if regexFilter != nil {
+				folderAndTitle := folderName + "/" + dashboard.Title
+				if regexFilter.FindStringIndex(folderAndTitle) == nil {
+					log.WithFields(log.Fields{
+						"dashboard-path": folderAndTitle,
+						"filter":         configuration.Filter,
+					}).Info("Skipping import because dashboard does not match the specified filter pattern.")
+					continue
+				}
 			}
 
 			//gitDashboardExtended := getDashboardObjectFromRawDashboard(gitRawDashboard)
