@@ -3,13 +3,16 @@
 A small CLI tool to do a tag-base automatic synchornization and backup Grafana of dashboards across multiple Grafana instances.
 
 This application can be used to synchronize dashboards, using a Git repository, across multiple Grafana instances.  
-A possible use case is: push Grafana dashboards from one Grafana instance to a Git repository and import them into another Grafana instance. In addition, users can use tags to determine for themselves when a dashboard should be synchronized.
+A possible use cases:
+- Backup certain dashboards regularly using a Git repository
+- Push Grafana dashboards from one Grafana instance to a Git repository and import them into another Grafana instance. In addition, users can use tags to determine for themselves when a dashboard should be synchronized.
+- Preload new Grafana instances with predefined dashboards.
 
-As an example this is useful to stage dashboards from "dev" to "prod" environments.
+#### Example Usecase
 
-The special thing is that the synchronization of dashboards is based on tags, which can be created by the users themselves. Thus, users can determine when a dashboard is ready for synchronization, e.g. so that it is synchronized from a "dev" to a "prod" environment.
+This can be useful to stage dashboards from "dev" to "prod" environments.
 
-If a dashboard is imported to Grafana but a dashboard with the same name or ID already exists there, it will be overwritten. For security reasons, dashboards **are not deleted** by the application. If a dashboard is obsolete, it must be deleted manually by the user.
+![image](images/dashboard-synchronizer.png)
 
 ## Usage
 
@@ -59,11 +62,10 @@ See the following configuration for available configuration options:
          enable: true
          # the branch to use for exporting dashboards
          git-branch: "push-branch"
-         # only dashboards with match this pattern will be considered in the sync process.
-         # this value is a WHITELIST in case it is not empty!!!
+         # only dashboards with match this pattern will be considered in the sync process
          filter: ""
          # the tag to determine which dashboards should be exported
-         tag-pattern: "sync"
+         tag-pattern: "agent"
          # whether the sync-tag should be kept during exporting
          push-tags: true
 
@@ -73,8 +75,7 @@ See the following configuration for available configuration options:
          enable: true
          # the branch to use for importing dashboards
          git-branch: "pull-branch"
-         # only dashboards with match this pattern will be considered in the sync process.
-         # this value is a WHITELIST in case it is not empty!!!
+         # only dashboards with match this pattern will be considered in the sync process
          filter: ""
 
 ## Development
