@@ -41,6 +41,13 @@ func NewSynchronizer(options SynchronizeOptions) *Synchronization {
 		options: options,
 	}
 
+	log.WithFields(log.Fields{
+		"job":              options.JobName,
+		"repository-url":   options.GitRepositoryUrl,
+		"private-key-file": options.PrivateKeyFile,
+		"grafana-url":      options.GrafanaUrl,
+	}).Info("Initialize synchronizer job.")
+
 	synchronization.grafanaApi = NewGrafanaApi(options.GrafanaUrl, options.GrafanaToken)
 	synchronization.gitApi = NewGitApi(options.GitRepositoryUrl, options.PrivateKeyFile)
 
@@ -56,10 +63,8 @@ type Synchronization struct {
 // Executes the synchronization using the configuration stored in this struct.
 func (s *Synchronization) Synchronize(dryRun bool) error {
 	log.WithFields(log.Fields{
-		"job":            s.options.JobName,
-		"dry-run":        strconv.FormatBool(dryRun),
-		"repository-url": s.options.GitRepositoryUrl,
-		"grafana-url":    s.options.GrafanaUrl,
+		"job":     s.options.JobName,
+		"dry-run": strconv.FormatBool(dryRun),
 	}).Info("Starting synchronization.")
 
 	// push dashboard into Git
@@ -77,6 +82,10 @@ func (s *Synchronization) Synchronize(dryRun bool) error {
 			return err
 		}
 	}
+
+	log.WithFields(log.Fields{
+		"job": s.options.JobName,
+	}).Info("Job was successfully completed.")
 
 	return nil
 }

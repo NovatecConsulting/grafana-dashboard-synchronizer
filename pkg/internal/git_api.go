@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -29,9 +30,12 @@ type GitApi struct {
 
 // NewGitApi creates a new NewGitApi instance
 func NewGitApi(gitUrl string, privateKeyFile string) *GitApi {
-	authenticator, err := createAuthenticator(privateKeyFile)
+	authenticator, err := createPublicKeys(privateKeyFile)
 	if err != nil {
-		log.Fatal("authentication failed", "error", err.Error())
+		log.WithFields(log.Fields{
+			"error":            err,
+			"private-key-file": privateKeyFile,
+		}).Fatal("Failed to load publiy key from the private key.")
 	}
 	inMemoryStore, inMemoryFileSystem := createInMemory()
 	gitApi := GitApi{gitUrl, authenticator, *inMemoryStore, inMemoryFileSystem, nil}
@@ -40,11 +44,13 @@ func NewGitApi(gitUrl string, privateKeyFile string) *GitApi {
 }
 
 // helper function to create the git authenticator
-func createAuthenticator(privateKeyFile string) (*ssh.PublicKeys, error) {
+func createPublicKeys(privateKeyFile string) (*ssh.PublicKeys, error) {
+	if privateKeyFile == "" {
+		return nil, errors.New("Private key must not be empty.")
+	}
 	// git authentication with ssh
 	authenticator, err := ssh.NewPublicKeysFromFile("git", privateKeyFile, "")
 	if err != nil {
-		log.Fatal("generate public keys failed", "error", err.Error())
 		return nil, err
 	}
 
