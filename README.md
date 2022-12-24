@@ -53,8 +53,11 @@ See the following configuration for available configuration options:
       grafana-url:   "http://localhost:3000"
       # SSH-URL of the Git repository to use
       git-repository-url: "<GIT_REPOSITORY_URL>"
-      # Private key to use for authentication against the Git repository
+      # Auth Option 1: Private key to use for authentication against the Git repository
       private-key-file:   "<PRIVATE_SSH_KEY>"
+      # Auth Option 2: Use authentication token (eg. Github or Gitlab token)
+      git-username: "<GIT_USERNAME>"
+      git-password: "<GIT_PASSWORD>" # this is where your authentication token goes
 
       # push (export) related configurations
       push-configuration:

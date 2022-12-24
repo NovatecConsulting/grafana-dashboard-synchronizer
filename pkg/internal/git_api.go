@@ -6,31 +6,41 @@ import (
 	"io/ioutil"
 	"time"
 
-	"gopkg.in/src-d/go-git.v4/plumbing"
+	"github.com/go-git/go-git/v5/plumbing"
 
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-billy/v5/memfs"
+	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	object2 "github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
+	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	"github.com/go-git/go-git/v5/storage/memory"
 	log "github.com/sirupsen/logrus"
 	ssh2 "golang.org/x/crypto/ssh"
-	"gopkg.in/src-d/go-billy.v4"
-	"gopkg.in/src-d/go-billy.v4/memfs"
-	"gopkg.in/src-d/go-git.v4"
-	object2 "gopkg.in/src-d/go-git.v4/plumbing/object"
-	"gopkg.in/src-d/go-git.v4/plumbing/transport/ssh"
-	"gopkg.in/src-d/go-git.v4/storage/memory"
 )
 
 // GitApi access to git api
 type GitApi struct {
 	gitUrl             string
-	authenticator      *ssh.PublicKeys
+	authenticator      transport.AuthMethod
 	inMemoryStore      memory.Storage
 	inMemoryFileSystem billy.Filesystem
 	repository         *git.Repository
 }
 
 // NewGitApi creates a new NewGitApi instance
-func NewGitApi(gitUrl string, privateKeyFile string) *GitApi {
-	authenticator, err := createPublicKeys(privateKeyFile)
+func NewGitApi(gitUrl string, privateKeyFile *string, gitUserName *string, gitPassword *string) *GitApi {
+	var authenticator transport.AuthMethod
+	var err error
+	if privateKeyFile != nil {
+		authenticator, err = createPublicKeys(*privateKeyFile)
+	} else if gitUserName != nil && gitPassword != nil {
+		authenticator, err = createBasicAuth(*gitUserName, *gitPassword)
+	} else {
+		err = errors.New("No authentication method provided, either set `private-key-file` or (`git-user-name` and `git-password`)")
+	}
 	if err != nil {
 		log.WithFields(log.Fields{
 			"error":            err,
@@ -44,7 +54,7 @@ func NewGitApi(gitUrl string, privateKeyFile string) *GitApi {
 }
 
 // helper function to create the git authenticator
-func createPublicKeys(privateKeyFile string) (*ssh.PublicKeys, error) {
+func createPublicKeys(privateKeyFile string) (transport.AuthMethod, error) {
 	if privateKeyFile == "" {
 		return nil, errors.New("Private key must not be empty.")
 	}
@@ -57,7 +67,26 @@ func createPublicKeys(privateKeyFile string) (*ssh.PublicKeys, error) {
 	// TODO delete and set known hosts?
 	authenticator.HostKeyCallback = ssh2.InsecureIgnoreHostKey()
 
-	return authenticator, err
+	// After this point use the AuthMethod interface
+	var output transport.AuthMethod = authenticator
+	return output, err
+}
+
+func createBasicAuth(userName string, password string) (transport.AuthMethod, error) {
+	if userName == "" {
+		return nil, errors.New("Username not be empty.")
+	}
+	if password == "" {
+		return nil, errors.New("Password not be empty.")
+	}
+	authenticator := &http.BasicAuth{
+		Username: userName,
+		Password: password,
+	}
+
+	// After this point use the AuthMethod interface
+	var output transport.AuthMethod = authenticator
+	return output, nil
 }
 
 // helper function to create the in memory storage and filesystem

@@ -16,8 +16,10 @@ type SynchronizeOptions struct {
 	GrafanaToken string `yaml:"grafana-token"`
 	GrafanaUrl   string `yaml:"grafana-url"`
 
-	GitRepositoryUrl string `yaml:"git-repository-url"`
-	PrivateKeyFile   string `yaml:"private-key-file"`
+	GitRepositoryUrl string  `yaml:"git-repository-url"`
+	PrivateKeyFile   *string `yaml:"private-key-file,omitempty"`
+	GitUserName      *string `yaml:"git-username,omitempty"`
+	GitPassword      *string `yaml:"git-password,omitempty"`
 
 	PushConfiguration PushConfiguration `yaml:"push-configuration"`
 	PullConfiguration PullConfiguration `yaml:"pull-configuration"`
@@ -49,7 +51,7 @@ func NewSynchronizer(options SynchronizeOptions) *Synchronization {
 	}).Info("Initialize synchronizer job.")
 
 	synchronization.grafanaApi = NewGrafanaApi(options.GrafanaUrl, options.GrafanaToken)
-	synchronization.gitApi = NewGitApi(options.GitRepositoryUrl, options.PrivateKeyFile)
+	synchronization.gitApi = NewGitApi(options.GitRepositoryUrl, options.PrivateKeyFile, options.GitUserName, options.GitPassword)
 
 	return &synchronization
 }
